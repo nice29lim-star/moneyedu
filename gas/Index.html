@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>🎮 상업고 금융교육 캠프 - 2D 모의주식 웹앱</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React 18 & Babel Standalone CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Canvas Confetti for Celebration -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <!-- Retro Pixel Font (DungGeunMo / Galmuri) & Pretendard -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri/dist/galmuri.css" />
+
+  <style>
+    body {
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      background-color: #F8F9FA;
+      background-image: 
+        radial-gradient(#E2E8F0 1.5px, transparent 1.5px),
+        radial-gradient(#E2E8F0 1.5px, #F8F9FA 1.5px);
+      background-size: 30px 30px;
+      background-position: 0 0, 15px 15px;
+      color: #2D3436;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .font-pixel {
+      font-family: "Galmuri11", "Galmuri9", "DungGeunMo", monospace, sans-serif;
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F2F6;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+      border: 2px solid #F1F2F6;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React 18 Application Script -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    // =========================================================================
+    // 1. 8-Bit Retro Sound Effects (Web Audio API)
+    // =========================================================================
+    let audioCtx = null;
+    let isSoundOn = true;
+
+    function getAudioCtx() {
+      if (!audioCtx) {
+        const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtxClass) audioCtx = new AudioCtxClass();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+      return audioCtx;
+    }
+
+    function playSound(type) {
+      if (!isSoundOn) return;
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      try {
+        const now = ctx.currentTime;
+        if (type === 'select') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(440, now);
+          osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(now + 0.08);
+        } else if (type === 'coin') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(987.77, now);
+          osc.frequency.setValueAtTime(1318.51, now + 0.08);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(now + 0.35);
+        } else if (type === 'success') {
+          [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(f, now + i * 0.08);
+            gain.gain.setValueAtTime(0.1, now + i * 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.2);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + i * 0.08);
+            osc.stop(now + i * 0.08 + 0.2);
+          });
+        } else if (type === 'buzzer') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.linearRampToValueAtTime(150, now + 0.25);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(now + 0.25);
+        } else if (type === 'trade') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(587.33, now);
+          osc.frequency.setValueAtTime(880.0, now + 0.07);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(now + 0.22);
+        }
+      } catch (e) {}
+    }
+
+    // =========================================================================
+    // 2. Google Apps Script RPC Wrapper
+    // =========================================================================
+    function callGAS(funcName, ...args) {
+      return new Promise((resolve, reject) => {
+        if (window.google && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)[funcName](...args);
+        } else {
+          // 로컬 개발/미리보기 fallback
+          console.warn(`[Local Fallback] Calling GAS API: ${funcName}`, args);
+          setTimeout(() => {
+            if (funcName === 'apiGetMasterData') {
+              resolve({
+                ok: true,
+                jobs: DEFAULT_JOBS,
+                quizzes: DEFAULT_QUIZZES,
+                companies: DEFAULT_COMPANIES,
+                news: DEFAULT_NEWS,
+              });
+            } else if (funcName === 'apiCreateSession') {
+              resolve({ ok: true, sessionId: 'FC' + Math.floor(1000 + Math.random() * 9000), token: 'TKN_TEST' });
+            } else if (funcName === 'apiStudentLogin') {
+              const [sId, name, num] = args;
+              resolve({ ok: true, student: { sessionId: sId, studentId: name + '_' + num, name, studentNum: num, quizBonus: 0 } });
+            } else if (funcName === 'apiPollSession') {
+              const [sId, stId] = args;
+              resolve({
+                ok: true,
+                session: { '세션ID': sId, '현재모듈': 'lobby', '주식_현재라운드': 1, '주식_상태': 'news', '현재퀴즈번호': 0 },
+                students: [],
+                companies: DEFAULT_COMPANIES,
+                allNews: DEFAULT_NEWS,
+              });
+            } else {
+              resolve({ ok: true, message: '완료되었습니다.' });
+            }
+          }, 300);
+        }
+      });
+    }
+
+    // =========================================================================
+    // 3. Fallback Seed Data (직업 6종, 퀴즈 20문항, 기업 10종, 뉴스 시나리오)
+    // =========================================================================
+    const DEFAULT_JOBS = [
+      { 직업ID: 'J1', 직업명: '편의점 아르바이트생', 월기본급: 1800000, 설명: '학생들이 가장 쉽게 시작하는 첫 일자리' },
+      { 직업ID: 'J2', 직업명: '마케팅 사원', 월기본급: 2400000, 설명: '상품 홍보와 브랜드 전략을 담당하는 직무' },
+      { 직업ID: 'J3', 직업명: '웹 개발자', 월기본급: 3000000, 설명: '온라인 서비스와 웹 시스템을 구축하는 엔지니어' },
+      { 직업ID: 'J4', 직업명: '금융 컨설턴트', 월기본급: 3600000, 설명: '고객의 자산 관리와 금융 포트폴리오를 설계' },
+      { 직업ID: 'J5', 직업명: 'AI 데이터 전문가', 월기본급: 4200000, 설명: '인공지능 모델과 빅데이터를 분석하는 첨단 직업' },
+      { 직업ID: 'J6', 직업명: '스타트업 대표', 월기본급: 5000000, 설명: '혁신적인 아이디어로 회사를 경영하는 창업가' },
+    ];
+
+    const DEFAULT_QUIZZES = [
+      { 퀴즈ID: 'Q01', 문제: '예금과 적금의 차이로 옳은 것은?', 보기1: '적금은 매달 나눠 넣는 방식이다', 보기2: '예금은 매달 나눠 넣어야 한다', 보기3: '적금은 이자가 붙지 않는다', 보기4: '예금은 한 번에 목돈을 못 넣는다', 정답: '보기1', 해설: '적금은 매달 정해진 금액을 차곡차곡 적립하는 저축 방식입니다.' },
+      { 퀴즈ID: 'Q02', 문제: '신용카드를 쓸 때 가장 조심해야 하는 것은?', 보기1: '카드 디자인', 보기2: '포인트 적립', 보기3: '쓴 만큼 다음 달에 갚아야 한다는 것', 보기4: '카드 발급 회사', 정답: '보기3', 해설: '신용카드는 외상 거래이므로 결제일에 갚지 못하면 높은 연체료가 발생합니다.' },
+      { 퀴즈ID: 'Q03', 문제: '주식 1주를 산다는 것의 진정한 의미는?', 보기1: '그 회사의 돈을 빌려주는 것', 보기2: '그 회사의 주인이 되는 지분을 갖는 것', 보기3: '복권을 사는 것', 보기4: '이자만 받는 것', 정답: '보기2', 해설: '주식을 사면 그 기업의 일부 소유권(지분)을 가지며 회사의 성장을 공유합니다.' },
+      { 퀴즈ID: 'Q04', 문제: '이자(수익)에 또 이자가 붙는 마법 같은 원리는?', 보기1: '단리', 보기2: '복리', 보기3: '원금보장', 보기4: '소득공제', 정답: '보기2', 해설: '복리는 원금뿐만 아니라 붙은 이자에도 다시 이자가 붙어 시간이 지날수록 자산이 눈덩이처럼 불어납니다.' },
+      { 퀴즈ID: 'Q05', 문제: '"계란을 한 바구니에 담지 마라"는 금융 격언이 뜻하는 것은?', 보기1: '한 종목에 몰빵 투자하라', 보기2: '다양한 자산에 분산 투자하라', 보기3: '달걀 요리를 배워라', 보기4: '저축만 하라', 정답: '보기2', 해설: '특정 자산이 폭락하더라도 전체 자산을 보호하기 위해 분산 투자가 필수적입니다.' },
+    ];
+
+    const DEFAULT_COMPANIES = [
+      { id: 1, 기업명: '반짝전자', 업종: '반도체/IT', 초기가: 5000, 현재가: 5000, icon: '⚡', description: '차세대 AI 반도체 및 메모리 선도 기업' },
+      { id: 2, 기업명: '든든푸드', 업종: '식품/유통', 초기가: 5000, 현재가: 5000, icon: '🍔', description: 'K-푸드 열풍을 이끄는 안정적인 식음료 제조사' },
+      { id: 3, 기업명: '모아은행', 업종: '금융/핀테크', 초기가: 5000, 현재가: 5000, icon: '🏦', description: '디지털 뱅킹과 높은 배당을 자랑하는 금융지주' },
+      { id: 4, 기업명: '그린에너지', 업종: '신재생에너지', 초기가: 5000, 현재가: 5000, icon: '🌱', description: '태양광 및 풍력 발전 친환경 인프라 기업' },
+      { id: 5, 기업명: '스피드모빌리티', 업종: '전기차/배터리', 초기가: 5000, 현재가: 5000, icon: '🚗', description: '자율주행 및 고효율 전기 배터리 혁신 기업' },
+      { id: 6, 기업명: '플레이게임즈', 업종: '게임/엔터', 초기가: 5000, 현재가: 5000, icon: '🎮', description: '글로벌 히트 모바일 게임 개발 및 메타버스 기업' },
+      { id: 7, 기업명: '바이오헬스', 업종: '제약/바이오', 초기가: 5000, 현재가: 5000, icon: '💊', description: '차세대 신약 개발 및 바이오시밀러 생산 기업' },
+      { id: 8, 기업명: '로켓커머스', 업종: '이커머스/물류', 초기가: 5000, 현재가: 5000, icon: '🚀', description: '당일 새벽 배송과 압도적 물류망을 보유한 플랫폼' },
+      { id: 9, 기업명: '우주항공', 업종: '항공/우주', 초기가: 5000, 현재가: 5000, icon: '🛰️', description: '민간 인공위성 발사 및 차세대 우주 탐사 기업' },
+      { id: 10, 기업명: '스마트건설', 업종: '건설/인프라', 초기가: 5000, 현재가: 5000, icon: '🏗️', description: '스마트시티와 글로벌 플랜트 건설 전문 기업' },
+    ];
+
+    const DEFAULT_NEWS = [
+      { id: 'N01', 대상기업: '반짝전자', 영향도: '급등', 등락률: 25, 뉴스본문: '반짝전자, 차세대 2나노 AI 반도체 양산 성공 및 글로벌 빅테크 공급 체결!' },
+      { id: 'N02', 대상기업: '든든푸드', 영향도: '상승', 등락률: 12, 뉴스본문: '든든푸드, K-라면 북미 수출액 역대 최고치 경신… 분기 순이익 30% 증가' },
+      { id: 'N03', 대상기업: '스피드모빌리티', 영향도: '폭락', 등락률: -20, 뉴스본문: '핵심 배터리 원자재 가격 급등 및 주요 시장 보조금 축소로 수익성 악화 우려' },
+      { id: 'N04', 대상기업: '모아은행', 영향도: '상승', 등락률: 8, 뉴스본문: '기준금리 인상과 견고한 예대마진 유지로 연간 최대 실적 달성 전망' },
+      { id: 'N05', 대상기업: '바이오헬스', 영향도: '급등', 등락률: 30, 뉴스본문: '개발 중인 차세대 항암 표적치료제 글로벌 임상 3상 시험 공식 승인' },
+      { id: 'N06', 대상기업: '플레이게임즈', 영향도: '하락', 등락률: -15, 뉴스본문: '신작 기대작 게임 출시 일정 내년 하반기로 연기… 초기 반응 둔화' },
+    ];
+
+    // =========================================================================
+    // 4. UI Atom Components (Retro Pixel Theme)
+    // =========================================================================
+    function PixelBadge({ children, variant = 'blue', className = '' }) {
+      const styles = {
+        gold: 'bg-[#FFD32D] text-[#1A1A1A] border-2 border-black shadow-[2px_2px_0px_0px_#000]',
+        blue: 'bg-[#74B9FF] text-[#1A1A1A] border-2 border-black shadow-[2px_2px_0px_0px_#000]',
+        green: 'bg-[#55E6C1] text-[#1A1A1A] border-2 border-black shadow-[2px_2px_0px_0px_#000]',
+        red: 'bg-[#FF7675] text-white border-2 border-black shadow-[2px_2px_0px_0px_#000]',
+        purple: 'bg-[#A29BFE] text-[#1A1A1A] border-2 border-black shadow-[2px_2px_0px_0px_#000]',
+        slate: 'bg-white text-[#2D3436] border-2 border-black shadow-[2px_2px_0px_0px_#000]',
+        dark: 'bg-[#1A1A1A] text-white border-2 border-black shadow-[2px_2px_0px_0px_#000]',
+      };
+      return (
+        <span className={`inline-flex items-center px-2.5 py-1 text-xs font-black uppercase tracking-wider rounded-xl ${styles[variant] || styles.blue} ${className}`}>
+          {children}
+        </span>
+      );
+    }
+
+    function PixelCard({ children, className = '', variant = 'white' }) {
+      const bgMap = {
+        white: 'bg-white',
+        gold: 'bg-[#FFFBEB]',
+        cyan: 'bg-[#EBF7FF]',
+        rose: 'bg-[#FFF0F0]',
+        green: 'bg-[#EBFBF7]',
+      };
+      return (
+        <div className={`relative rounded-3xl border-4 border-black text-[#2D3436] shadow-[6px_6px_0px_0px_#000] transition-all duration-200 ${bgMap[variant] || 'bg-white'} ${className}`}>
+          {children}
+        </div>
+      );
+    }
+
+    function PixelButton({ children, onClick, variant = 'primary', size = 'md', disabled = false, className = '' }) {
+      const base = 'relative inline-flex items-center justify-center font-black uppercase transition-all duration-100 rounded-xl border-2 border-black cursor-pointer select-none';
+      const sizeStyles = {
+        sm: 'px-3 py-1.5 text-xs',
+        md: 'px-4 py-2 text-sm',
+        lg: 'px-6 py-3 text-base',
+      };
+      const variantStyles = {
+        primary: 'bg-[#74B9FF] hover:bg-[#5fa8f7] text-[#1A1A1A] shadow-[3px_3px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0px_0px_#000]',
+        secondary: 'bg-white hover:bg-[#F1F2F6] text-[#2D3436] shadow-[3px_3px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0px_0px_#000]',
+        success: 'bg-[#55E6C1] hover:bg-[#3ce2b7] text-[#1A1A1A] shadow-[3px_3px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0px_0px_#000]',
+        danger: 'bg-[#FF7675] hover:bg-[#ff5e5d] text-white shadow-[3px_3px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0px_0px_#000]',
+        gold: 'bg-[#FFD32D] hover:bg-[#f6c61b] text-[#1A1A1A] shadow-[3px_3px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0px_0px_#000]',
+        dark: 'bg-[#1A1A1A] hover:bg-[#2D3436] text-white shadow-[3px_3px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0px_0px_#000]',
+      };
+      const disabledStyles = 'opacity-40 cursor-not-allowed grayscale pointer-events-none shadow-none translate-x-0 translate-y-0';
+
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            if (!disabled && onClick) {
+              playSound('select');
+              onClick();
+            }
+          }}
+          disabled={disabled}
+          className={`${base} ${sizeStyles[size]} ${variantStyles[variant]} ${disabled ? disabledStyles : ''} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    // =========================================================================
+    // 5. Canvas Report & Certificate Exporter (PNG 다운로드)
+    // =========================================================================
+    function downloadCanvasCertificate(report) {
+      const width = 800;
+      const height = 1050;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Dark Navy Arcade Canvas
+      ctx.fillStyle = '#0F172A';
+      ctx.fillRect(0, 0, width, height);
+
+      // Outer Golden Pixel Border
+      ctx.strokeStyle = '#F59E0B';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(16, 16, width - 32, height - 32);
+
+      // Inner Accent Border
+      ctx.strokeStyle = '#38BDF8';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(26, 26, width - 52, height - 52);
+
+      // Top Title Badge
+      ctx.fillStyle = '#1E293B';
+      ctx.fillRect(40, 45, width - 80, 80);
+      ctx.strokeStyle = '#64748B';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(40, 45, width - 80, 80);
+
+      ctx.fillStyle = '#F59E0B';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🎮 상업고등학교 금융교육 캠프 📈', width / 2, 78);
+
+      ctx.fillStyle = '#38BDF8';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.fillText('모의주식 투자 종합 성적표 & 수료증', width / 2, 112);
+
+      // Student Profile
+      ctx.fillStyle = '#1E293B';
+      ctx.fillRect(40, 145, width - 80, 110);
+      ctx.strokeStyle = '#475569';
+      ctx.strokeRect(40, 145, width - 80, 110);
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = '15px sans-serif';
+      ctx.fillText('학생 이름 / 학번', 60, 175);
+      ctx.fillText('선택 직업', 340, 175);
+      ctx.fillText('학급 내 최종 순위', 600, 175);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText(`${report.studentName} (${report.studentNum || '학생'})`, 60, 210);
+      ctx.fillText(`${report.jobTitle || '금융 트레이더'}`, 340, 210);
+
+      ctx.fillStyle = '#FBBF24';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(`${report.rank || 1}위 / ${report.totalStudents || 1}명`, 600, 210);
+
+      // Investment Result Hero Box
+      const isPositive = (report.profitRate || 0) >= 0;
+      ctx.fillStyle = '#090D16';
+      ctx.fillRect(40, 275, width - 80, 170);
+      ctx.strokeStyle = isPositive ? '#EF4444' : '#3B82F6';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(40, 275, width - 80, 170);
+
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = '16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('최종 누적 수익률 (ROI)', width / 2, 305);
+
+      ctx.fillStyle = isPositive ? '#EF4444' : '#3B82F6';
+      ctx.font = 'bold 44px sans-serif';
+      ctx.fillText(`${isPositive ? '+' : ''}${(report.profitRate || 0).toFixed(2)}%`, width / 2, 355);
+
+      ctx.font = '15px sans-serif';
+      ctx.fillStyle = '#94A3B8';
+      ctx.fillText(`초기 원금: ${(report.initialInvestment || 0).toLocaleString()}원   ➔   최종 자산: ${(report.finalTotalAsset || 0).toLocaleString()}원`, width / 2, 395);
+
+      ctx.fillStyle = isPositive ? '#FCA5A5' : '#93C5FD';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText(`순손익: ${isPositive ? '+' : ''}${(report.totalProfit || 0).toLocaleString()}원 (현금 ${(report.finalCash || 0).toLocaleString()}원 + 주식 ${(report.finalStockValuation || 0).toLocaleString()}원)`, width / 2, 425);
+
+      // Investor Type Box
+      ctx.fillStyle = '#1E293B';
+      ctx.fillRect(40, 465, width - 80, 160);
+      ctx.strokeStyle = '#F59E0B';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(40, 465, width - 80, 160);
+
+      const p = report.investorType || { badge: '성장 탐험가', title: '탁월한 투자자', description: '성실히 금융 모듈을 이수했습니다.', tips: '분산 투자를 유지하세요.' };
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#F59E0B';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText(`투자 성향 분석: [ ${p.badge} ] ${p.title}`, 60, 500);
+
+      ctx.fillStyle = '#E2E8F0';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(`“${p.description}”`, 60, 535);
+
+      ctx.fillStyle = '#38BDF8';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(`💡 조언: ${p.tips}`, 60, 575);
+
+      // Bottom Stamp & Official Certification
+      ctx.fillStyle = '#1E293B';
+      ctx.fillRect(40, height - 120, width - 80, 65);
+      ctx.strokeStyle = '#F59E0B';
+      ctx.strokeRect(40, height - 120, width - 80, 65);
+
+      ctx.fillStyle = '#E2E8F0';
+      ctx.font = '13px sans-serif';
+      ctx.fillText(`발급일자: ${new Date().toLocaleDateString('ko-KR')} | 검증ID: ${report.studentId}`, 60, height - 85);
+      ctx.fillText('본 학생은 2D 게임풍 금융교육 캠프 3단 모듈(퀴즈/배분/모의주식)을 성실히 이수하였음을 증명합니다.', 60, height - 65);
+
+      // Red Official Seal Stamp
+      ctx.save();
+      ctx.translate(width - 120, height - 85);
+      ctx.rotate(-0.1);
+      ctx.strokeStyle = '#DC2626';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 32, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#DC2626';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('금융교육', 0, -6);
+      ctx.fillText('캠프인증', 0, 12);
+      ctx.restore();
+
+      // Trigger PNG Download
+      const link = document.createElement('a');
+      link.download = `금융캠프_성적표_${report.studentName || '학생'}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // =========================================================================
+    // 6. Main App Controller Component
+    // =========================================================================
+    function App() {
+      // Global State
+      const [view, setView] = useState('landing'); // landing, teacher, student
+      const [teacherView, setTeacherView] = useState('dashboard'); // dashboard, quiz, budget, stock, report
+      const [studentView, setStudentView] = useState('login'); // login, lobby, quiz, budget, stock, report
+
+      // Session & User Data
+      const [sessionId, setSessionId] = useState('');
+      const [teacherName, setTeacherName] = useState('선생님');
+      const [teacherToken, setTeacherToken] = useState('');
+      
+      const [student, setStudent] = useState(null);
+      const [sessionData, setSessionData] = useState(null);
+      const [studentsList, setStudentsList] = useState([]);
+      const [companiesList, setCompaniesList] = useState(DEFAULT_COMPANIES);
+      const [newsList, setNewsList] = useState(DEFAULT_NEWS);
+      const [quizzesList, setQuizzesList] = useState(DEFAULT_QUIZZES);
+      const [jobsList, setJobsList] = useState(DEFAULT_JOBS);
+
+      // Student local state
+      const [selectedJob, setSelectedJob] = useState(null);
+      const [quizBonus, setQuizBonus] = useState(0);
+      const [myAsset, setMyAsset] = useState({ cash: 500000, initialInvestment: 500000, holdings: {}, profitRate: 0, profitAmount: 0 });
+      const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
+      const [quizSelectedOption, setQuizSelectedOption] = useState(null);
+      const [quizSubmitted, setQuizSubmitted] = useState(false);
+
+      // Budget Allocations (%)
+      const [livingPct, setLivingPct] = useState(50);
+      const [savingsPct, setSavingsPct] = useState(30);
+      const [investPct, setInvestPct] = useState(20);
+
+      // Teacher Rankings
+      const [rankings, setRankings] = useState([]);
+      const [avgProfitRate, setAvgProfitRate] = useState(0);
+
+      // Polling Effect
+      useEffect(() => {
+        if (!sessionId) return;
+        const poll = async () => {
+          try {
+            const res = await callGAS('apiPollSession', sessionId, student ? student.studentId : '');
+            if (res && res.ok) {
+              setSessionData(res.session);
+              setStudentsList(res.students || []);
+              if (res.companies && res.companies.length > 0) setCompaniesList(res.companies);
+              if (res.allNews && res.allNews.length > 0) setNewsList(res.allNews);
+              if (res.myStudent) setStudent(res.myStudent);
+              if (res.myAsset) setMyAsset(res.myAsset);
+
+              // Auto Sync Student View with Teacher's Active Module
+              if (view === 'student' && res.session) {
+                const mod = res.session['현재모듈'];
+                if (mod === 'lobby') setStudentView('lobby');
+                else if (mod === 'quiz') setStudentView('quiz');
+                else if (mod === 'budget') setStudentView('budget');
+                else if (mod === 'stock') setStudentView('stock');
+                else if (mod === 'report') setStudentView('report');
+              }
+            }
+          } catch (e) {}
+        };
+
+        poll();
+        const interval = setInterval(poll, 3000);
+        return () => clearInterval(interval);
+      }, [sessionId, view, student?.studentId]);
+
+      // Load Master Data on Mount
+      useEffect(() => {
+        callGAS('apiGetMasterData').then((res) => {
+          if (res && res.ok) {
+            if (res.jobs && res.jobs.length > 0) setJobsList(res.jobs);
+            if (res.quizzes && res.quizzes.length > 0) setQuizzesList(res.quizzes);
+            if (res.companies && res.companies.length > 0) setCompaniesList(res.companies);
+            if (res.news && res.news.length > 0) setNewsList(res.news);
+          }
+        });
+      }, []);
+
+      // -------------------------------------------------------------
+      // Top Navigation Bar
+      // -------------------------------------------------------------
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* Header */}
+          <header className="bg-white border-b-4 border-black px-4 py-3 sticky top-0 z-40 shadow-[0_4px_0px_0px_#000]">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
+              <div
+                className="flex items-center gap-2 cursor-pointer select-none"
+                onClick={() => {
+                  playSound('select');
+                  setView('landing');
+                }}
+              >
+                <div className="w-9 h-9 bg-[#FFD32D] border-2 border-black rounded-xl flex items-center justify-center text-lg shadow-[2px_2px_0px_0px_#000]">
+                  🎮
+                </div>
+                <div>
+                  <h1 className="text-base sm:text-lg font-black tracking-tight text-[#2D3436] flex items-center gap-1.5">
+                    <span>금융교육 캠프</span>
+                    <PixelBadge variant="gold">2D 모의주식</PixelBadge>
+                  </h1>
+                  <p className="text-[10px] text-[#636E72] font-bold">
+                    상업고 실전 경제 시뮬레이션 (Apps Script 완벽 연동)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {sessionId && (
+                  <div className="hidden sm:flex items-center gap-1.5 bg-[#FFFBEB] px-3 py-1 rounded-xl border-2 border-black text-xs font-mono font-black shadow-[2px_2px_0px_0px_#000]">
+                    <span className="text-[#636E72]">세션:</span>
+                    <span className="text-[#D63031]">{sessionId}</span>
+                  </div>
+                )}
+
+                <PixelButton
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    isSoundOn = !isSoundOn;
+                    playSound('select');
+                    setSessionId(sessionId + ''); // re-render
+                  }}
+                >
+                  {isSoundOn ? '🔊 사운드 ON' : '🔇 사운드 OFF'}
+                </PixelButton>
+
+                {view !== 'landing' && (
+                  <PixelButton
+                    variant="dark"
+                    size="sm"
+                    onClick={() => {
+                      setView('landing');
+                    }}
+                  >
+                    처음으로
+                  </PixelButton>
+                )}
+              </div>
+            </div>
+          </header>
+
+          {/* Main Body Routing */}
+          <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto">
+            {view === 'landing' && (
+              <LandingView
+                onSelectTeacher={() => {
+                  setView('teacher');
+                  setTeacherView('dashboard');
+                }}
+                onSelectStudent={() => {
+                  setView('student');
+                  setStudentView('login');
+                }}
+              />
+            )}
+
+            {view === 'teacher' && (
+              <TeacherMainView
+                sessionId={sessionId}
+                setSessionId={setSessionId}
+                teacherName={teacherName}
+                setTeacherName={setTeacherName}
+                teacherToken={teacherToken}
+                setTeacherToken={setTeacherToken}
+                teacherView={teacherView}
+                setTeacherView={setTeacherView}
+                sessionData={sessionData}
+                studentsList={studentsList}
+                companiesList={companiesList}
+                newsList={newsList}
+                quizzesList={quizzesList}
+                jobsList={jobsList}
+              />
+            )}
+
+            {view === 'student' && (
+              <StudentMainView
+                sessionId={sessionId}
+                setSessionId={setSessionId}
+                student={student}
+                setStudent={setStudent}
+                studentView={studentView}
+                setStudentView={setStudentView}
+                sessionData={sessionData}
+                companiesList={companiesList}
+                newsList={newsList}
+                quizzesList={quizzesList}
+                jobsList={jobsList}
+                selectedJob={selectedJob}
+                setSelectedJob={setSelectedJob}
+                quizBonus={quizBonus}
+                setQuizBonus={setQuizBonus}
+                myAsset={myAsset}
+                setMyAsset={setMyAsset}
+                currentQuizIdx={currentQuizIdx}
+                setCurrentQuizIdx={setCurrentQuizIdx}
+                quizSelectedOption={quizSelectedOption}
+                setQuizSelectedOption={setQuizSelectedOption}
+                quizSubmitted={quizSubmitted}
+                setQuizSubmitted={setQuizSubmitted}
+                livingPct={livingPct}
+                setLivingPct={setLivingPct}
+                savingsPct={savingsPct}
+                setSavingsPct={setSavingsPct}
+                investPct={investPct}
+                setInvestPct={setInvestPct}
+              />
+            )}
+          </main>
+
+          {/* Footer */}
+          <footer className="bg-white border-t-2 border-black py-4 px-4 text-center text-xs text-[#636E72] font-bold">
+            상업고등학교 맞춤형 금융교육 캠프 웹앱 • Google Apps Script + Spreadsheets Realtime Database
+          </footer>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // 7. Landing View Component
+    // =========================================================================
+    function LandingView({ onSelectTeacher, onSelectStudent }) {
+      return (
+        <div className="max-w-4xl mx-auto py-8 sm:py-12 space-y-8 text-center">
+          <div className="space-y-3">
+            <PixelBadge variant="gold">ARCADE FINANCIAL EDUCATION</PixelBadge>
+            <h2 className="text-3xl sm:text-5xl font-black text-[#2D3436] tracking-tight">
+              실전 모의주식 & 금융 캠프 📈
+            </h2>
+            <p className="text-sm sm:text-base text-[#636E72] max-w-xl mx-auto font-bold leading-relaxed">
+              1단계 금융 퀴즈 ➔ 2단계 직업 월급 & 3통장 배분 ➔ 3단계 6라운드 실시간 모의주식 매매까지!
+              구글 시트와 100% 동기화되는 실전 학습 플랫폼입니다.
+            </p>
+          </div>
+
+          {/* 2 Big Role Selection Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left max-w-3xl mx-auto">
+            {/* Teacher Card */}
+            <PixelCard variant="gold" className="p-6 sm:p-8 space-y-4 hover:scale-[1.02] transition-transform">
+              <div className="flex items-center justify-between">
+                <span className="text-4xl">👨‍🏫</span>
+                <PixelBadge variant="dark">TEACHER MODE</PixelBadge>
+              </div>
+              <h3 className="text-2xl font-black text-[#2D3436]">강사 / 선생님 모드</h3>
+              <p className="text-xs sm:text-sm text-[#636E72] font-bold leading-relaxed">
+                • 4자리 세션 코드 생성 및 학생 입장 통제<br />
+                • 퀴즈 진행 및 정답자 보너스 지급<br />
+                • 6라운드 기사 공개 ➔ 상장 시작 ➔ 마감 원클릭 제어<br />
+                • 실시간 순위표 및 종합 리포트 출력
+              </p>
+              <PixelButton variant="gold" size="lg" className="w-full" onClick={onSelectTeacher}>
+                강사 모드로 입장하기 ➔
+              </PixelButton>
+            </PixelCard>
+
+            {/* Student Card */}
+            <PixelCard variant="cyan" className="p-6 sm:p-8 space-y-4 hover:scale-[1.02] transition-transform">
+              <div className="flex items-center justify-between">
+                <span className="text-4xl">🧑‍🎓</span>
+                <PixelBadge variant="blue">STUDENT MODE</PixelBadge>
+              </div>
+              <h3 className="text-2xl font-black text-[#2D3436]">학생 / 참가자 모드</h3>
+              <p className="text-xs sm:text-sm text-[#636E72] font-bold leading-relaxed">
+                • 세션 코드 입력 후 이름/학번으로 간편 로그인<br />
+                • 금융 상식 퀴즈 풀고 시드머니 보너스 획득<br />
+                • 나의 직업 선택 및 세후 월급 3통장 배분<br />
+                • 10개 상장기업 6라운드 실시간 매수/매도 & 성적표
+              </p>
+              <PixelButton variant="primary" size="lg" className="w-full" onClick={onSelectStudent}>
+                학생 모드로 입장하기 ➔
+              </PixelButton>
+            </PixelCard>
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // 8. Teacher Main View & Controller
+    // =========================================================================
+    function TeacherMainView({
+      sessionId,
+      setSessionId,
+      teacherName,
+      setTeacherName,
+      teacherToken,
+      setTeacherToken,
+      teacherView,
+      setTeacherView,
+      sessionData,
+      studentsList,
+      companiesList,
+      newsList,
+      quizzesList,
+      jobsList,
+    }) {
+      const [creating, setCreating] = useState(false);
+      const [loginCode, setLoginCode] = useState('');
+      const [msg, setMsg] = useState('');
+
+      const handleCreateSession = async () => {
+        setCreating(true);
+        try {
+          const res = await callGAS('apiCreateSession', teacherName);
+          if (res && res.ok) {
+            playSound('success');
+            setSessionId(res.sessionId);
+            setTeacherToken(res.token);
+            setMsg(`세션이 생성되었습니다! 초대 코드: ${res.sessionId}`);
+          }
+        } catch (e) {
+          setMsg('세션 생성 중 오류가 발생했습니다.');
+        } finally {
+          setCreating(false);
+        }
+      };
+
+      const handleLoginSession = async () => {
+        if (!loginCode) return;
+        try {
+          const res = await callGAS('apiTeacherLogin', loginCode, '');
+          if (res && res.ok) {
+            playSound('success');
+            setSessionId(res.sessionId);
+            setTeacherToken(res.token);
+          } else {
+            playSound('buzzer');
+            setMsg(res.message || '세션을 찾을 수 없습니다.');
+          }
+        } catch (e) {}
+      };
+
+      const handleSetModule = async (mod) => {
+        if (!sessionId) return;
+        playSound('select');
+        await callGAS('apiUpdateSessionState', sessionId, mod, null, null, null);
+      };
+
+      const handleStockAction = async (stockRound, stockState) => {
+        if (!sessionId) return;
+        if (stockState === 'news') playSound('coin');
+        else if (stockState === 'trading') playSound('success');
+        else if (stockState === 'closed') playSound('buzzer');
+
+        await callGAS('apiUpdateSessionState', sessionId, 'stock', stockRound, stockState, null);
+      };
+
+      if (!sessionId) {
+        return (
+          <div className="max-w-md mx-auto py-12 space-y-6">
+            <PixelCard variant="gold" className="p-6 space-y-4">
+              <div className="text-center space-y-1">
+                <span className="text-4xl">👑</span>
+                <h3 className="text-xl font-black">강사 세션 개설 / 로그인</h3>
+                <p className="text-xs text-[#636E72] font-bold">학생들이 접속할 세션을 생성하세요.</p>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <div>
+                  <label className="text-xs font-black block mb-1">선생님 성함 / 호칭</label>
+                  <input
+                    type="text"
+                    value={teacherName}
+                    onChange={(e) => setTeacherName(e.target.value)}
+                    className="w-full bg-white border-2 border-black rounded-xl px-3 py-2 text-sm font-bold outline-none"
+                    placeholder="예: 홍길동 선생님"
+                  />
+                </div>
+
+                <PixelButton variant="gold" size="lg" className="w-full" onClick={handleCreateSession} disabled={creating}>
+                  {creating ? '세션 개설 중...' : '새로운 금융 캠프 세션 개설 ➔'}
+                </PixelButton>
+
+                <div className="pt-3 border-t-2 border-black/10">
+                  <label className="text-xs font-black block mb-1">기존 세션 코드로 재접속</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={loginCode}
+                      onChange={(e) => setLoginCode(e.target.value.toUpperCase())}
+                      className="flex-1 bg-white border-2 border-black rounded-xl px-3 py-2 text-sm font-mono font-black outline-none uppercase"
+                      placeholder="예: FC1234"
+                    />
+                    <PixelButton variant="secondary" size="md" onClick={handleLoginSession}>
+                      접속
+                    </PixelButton>
+                  </div>
+                </div>
+
+                {msg && <p className="text-xs text-[#D63031] font-black text-center pt-1">{msg}</p>}
+              </div>
+            </PixelCard>
+          </div>
+        );
+      }
+
+      const curMod = sessionData?.['현재모듈'] || 'lobby';
+      const curRound = Number(sessionData?.['주식_현재라운드'] || 1);
+      const curStockState = sessionData?.['주식_상태'] || 'waiting';
+
+      return (
+        <div className="space-y-6">
+          {/* Teacher Navigation Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b-2 border-black">
+            <div className="flex items-center gap-3">
+              <div className="bg-[#FFD32D] border-2 border-black px-3 py-1 rounded-xl font-mono font-black text-sm shadow-[2px_2px_0px_0px_#000]">
+                세션 코드: {sessionId}
+              </div>
+              <span className="text-xs text-[#636E72] font-bold">
+                접속 학생: <b className="text-[#2D3436] font-mono">{studentsList.length}명</b>
+              </span>
+            </div>
+
+            {/* Step Tab Buttons */}
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <PixelButton
+                variant={curMod === 'lobby' ? 'gold' : 'secondary'}
+                size="sm"
+                onClick={() => handleSetModule('lobby')}
+              >
+                대기실 (Lobby)
+              </PixelButton>
+              <PixelButton
+                variant={curMod === 'quiz' ? 'gold' : 'secondary'}
+                size="sm"
+                onClick={() => handleSetModule('quiz')}
+              >
+                1단계: 퀴즈
+              </PixelButton>
+              <PixelButton
+                variant={curMod === 'budget' ? 'gold' : 'secondary'}
+                size="sm"
+                onClick={() => handleSetModule('budget')}
+              >
+                2단계: 통장배분
+              </PixelButton>
+              <PixelButton
+                variant={curMod === 'stock' ? 'gold' : 'secondary'}
+                size="sm"
+                onClick={() => handleSetModule('stock')}
+              >
+                3단계: 모의주식
+              </PixelButton>
+              <PixelButton
+                variant={curMod === 'report' ? 'gold' : 'secondary'}
+                size="sm"
+                onClick={() => handleSetModule('report')}
+              >
+                최종 리포트
+              </PixelButton>
+            </div>
+          </div>
+
+          {/* Module 1: 퀴즈 관리 */}
+          {curMod === 'quiz' && (
+            <PixelCard variant="gold" className="p-6 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b-2 border-black">
+                <h3 className="text-lg font-black">1단계: 금융 퀴즈 진행 제어</h3>
+                <PixelBadge variant="purple">퀴즈 {quizzesList.length}문항 로드됨</PixelBadge>
+              </div>
+              <p className="text-xs text-[#636E72] font-bold">
+                학생들이 화면에서 문제를 풀면 실시간으로 정답 여부가 확인되며, 정답자에게 시드머니 보너스가 적립됩니다.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {quizzesList.slice(0, 6).map((q, idx) => (
+                  <div key={idx} className="p-3 bg-white rounded-xl border-2 border-black text-xs space-y-1 shadow-[2px_2px_0px_0px_#000]">
+                    <div className="font-black text-[#D63031]">Q{idx + 1}. {q.문제}</div>
+                    <div className="text-[11px] text-[#636E72]">정답: {q.정답} | {q.해설}</div>
+                  </div>
+                ))}
+              </div>
+            </PixelCard>
+          )}
+
+          {/* Module 2: 예산 배분 감시 */}
+          {curMod === 'budget' && (
+            <PixelCard variant="cyan" className="p-6 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b-2 border-black">
+                <h3 className="text-lg font-black">2단계: 직업 월급 & 3통장 배분 현황</h3>
+                <PixelBadge variant="green">{studentsList.length}명 참여 중</PixelBadge>
+              </div>
+              <p className="text-xs text-[#636E72] font-bold">
+                학생들이 6종 직업(월급 180만~500만)을 선택하고 4대보험/소득세 공제 후 생활비/저축/투자금으로 3통장 배분을 완료합니다.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {jobsList.map((j, idx) => (
+                  <div key={idx} className="p-3 bg-white rounded-xl border-2 border-black text-xs space-y-1 shadow-[2px_2px_0px_0px_#000]">
+                    <div className="font-black text-[#2D3436]">{j.직업명}</div>
+                    <div className="text-xs font-mono font-black text-[#D63031]">{Number(j.월기본급).toLocaleString()}원</div>
+                    <div className="text-[10px] text-[#636E72]">{j.설명}</div>
+                  </div>
+                ))}
+              </div>
+            </PixelCard>
+          )}
+
+          {/* Module 3: 모의주식 6라운드 라이프사이클 제어 */}
+          {curMod === 'stock' && (
+            <div className="space-y-6">
+              {/* Round Track */}
+              <PixelCard className="p-4">
+                <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+                  {[1, 2, 3, 4, 5, 6].map((r) => {
+                    const isCurrent = r === curRound;
+                    const isPast = r < curRound;
+                    return (
+                      <div
+                        key={r}
+                        className={`flex-1 min-w-[90px] p-2.5 rounded-2xl border-2 border-black text-center transition-all ${
+                          isCurrent
+                            ? 'bg-[#FFD32D] shadow-[3px_3px_0px_0px_#000]'
+                            : isPast
+                            ? 'bg-[#EBFBF7]'
+                            : 'bg-[#F8F9FA] text-[#A4B0BE]'
+                        }`}
+                      >
+                        <div className="text-[10px] font-mono font-black">ROUND {r}</div>
+                        <div className="text-xs font-black">
+                          {isCurrent ? (curStockState === 'waiting' ? '뉴스대기' : curStockState === 'news' ? '뉴스공개' : curStockState === 'trading' ? '상장거래중' : '마감') : isPast ? '완료 ✓' : '예정'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </PixelCard>
+
+              {/* 3 Step Action Controller */}
+              <PixelCard variant="gold" className="p-6 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b-2 border-black">
+                  <div>
+                    <span className="text-[11px] font-black text-[#D63031] uppercase">강사 라운드 컨트롤러</span>
+                    <h3 className="text-lg font-black">
+                      현재 상태: [ <span className="text-[#0984E3] font-mono">R{curRound} - {curStockState}</span> ]
+                    </h3>
+                  </div>
+                  <PixelBadge variant="dark">6라운드 시뮬레이션</PixelBadge>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                  <div className="space-y-1">
+                    <PixelButton
+                      variant="primary"
+                      size="lg"
+                      className="w-full"
+                      disabled={curStockState !== 'waiting'}
+                      onClick={() => handleStockAction(curRound, 'news')}
+                    >
+                      1. 기사 보기 (뉴스 2건 공개)
+                    </PixelButton>
+                    <p className="text-[10px] text-[#636E72] font-bold text-center">6칸 중 2칸의 뉴스 카드가 오픈됩니다.</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <PixelButton
+                      variant="gold"
+                      size="lg"
+                      className="w-full"
+                      disabled={curStockState !== 'news'}
+                      onClick={() => handleStockAction(curRound, 'trading')}
+                    >
+                      2. 상장 시작 (거래 오픈)
+                    </PixelButton>
+                    <p className="text-[10px] text-[#636E72] font-bold text-center">학생들의 매수/매도 버튼이 활성화됩니다.</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <PixelButton
+                      variant="danger"
+                      size="lg"
+                      className="w-full"
+                      disabled={curStockState !== 'trading'}
+                      onClick={() => {
+                        const nextR = curRound < 6 ? curRound + 1 : 6;
+                        const nextState = curRound < 6 ? 'waiting' : 'closed';
+                        handleStockAction(nextR, nextState);
+                        if (curRound === 6) handleSetModule('report');
+                      }}
+                    >
+                      3. 상장 마감 (가격 갱신 & 다음 라운드)
+                    </PixelButton>
+                    <p className="text-[10px] text-[#636E72] font-bold text-center">거래를 마감하고 주가를 갱신합니다.</p>
+                  </div>
+                </div>
+              </PixelCard>
+
+              {/* 10 Companies Ticker */}
+              <PixelCard className="p-5 space-y-3">
+                <h3 className="font-black text-base">상장 10개 기업 시세표</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 font-mono">
+                  {companiesList.map((c, idx) => (
+                    <div key={idx} className="p-2.5 bg-[#FFFBEB] rounded-xl border-2 border-black text-center shadow-[2px_2px_0px_0px_#000]">
+                      <div className="text-xl">{c.icon || '🏢'}</div>
+                      <div className="font-black text-xs text-[#2D3436] font-sans mt-0.5">{c.기업명}</div>
+                      <div className="text-xs font-black text-[#D63031] mt-1">{Number(c.현재가 || c.초기가 || 5000).toLocaleString()}원</div>
+                    </div>
+                  ))}
+                </div>
+              </PixelCard>
+            </div>
+          )}
+
+          {/* Module 4: 최종 리포트 및 명예의 전당 */}
+          {curMod === 'report' && (
+            <TeacherReportSection sessionId={sessionId} />
+          )}
+
+          {/* Student List Monitor */}
+          <PixelCard className="p-5 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b-2 border-black">
+              <h3 className="font-black text-base">참여 학생 명단 ({studentsList.length}명)</h3>
+              <span className="text-xs text-[#636E72] font-bold">실시간 구글 시트 동기화</span>
+            </div>
+            {studentsList.length === 0 ? (
+              <p className="text-xs text-[#636E72] font-bold text-center py-4">아직 접속한 학생이 없습니다. 학생들에게 세션 코드를 안내해 주세요.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {studentsList.map((st, idx) => (
+                  <div key={idx} className="p-2 bg-[#F8F9FA] rounded-xl border-2 border-black text-xs font-black flex items-center justify-between shadow-[2px_2px_0px_0px_#000]">
+                    <span>{st.이름 || st.학생ID}</span>
+                    <span className="text-[#636E72] font-mono text-[10px]">({st.학번 || '학생'})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </PixelCard>
+        </div>
+      );
+    }
+
+    function TeacherReportSection({ sessionId }) {
+      const [rankings, setRankings] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        callGAS('apiGetRankings', sessionId).then((res) => {
+          if (res && res.ok) {
+            setRankings(res.rankings || []);
+          }
+          setLoading(false);
+        });
+      }, [sessionId]);
+
+      if (loading) {
+        return <div className="p-8 text-center text-xs font-black">최종 순위 집계 중...</div>;
+      }
+
+      return (
+        <PixelCard variant="gold" className="p-6 space-y-6">
+          <div className="text-center space-y-1">
+            <PixelBadge variant="gold">HALL OF FAME</PixelBadge>
+            <h3 className="text-2xl font-black">🏆 금융 캠프 명예의 전당 & 투자 랭킹</h3>
+            <p className="text-xs text-[#636E72] font-bold">학생들의 최종 투자 성과와 개인별 성적표를 다운로드할 수 있습니다.</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse font-mono">
+              <thead>
+                <tr className="border-b-2 border-black bg-white">
+                  <th className="py-2.5 px-3 font-black">순위</th>
+                  <th className="py-2.5 px-3 font-black">학생 이름</th>
+                  <th className="py-2.5 px-3 font-black">직업</th>
+                  <th className="py-2.5 px-3 font-black">초기 원금</th>
+                  <th className="py-2.5 px-3 font-black">최종 자산</th>
+                  <th className="py-2.5 px-3 font-black">수익률 (ROI)</th>
+                  <th className="py-2.5 px-3 text-center font-black">성적표</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y-2 divide-black/10">
+                {rankings.map((r, idx) => (
+                  <tr key={idx} className="hover:bg-white/60">
+                    <td className="py-2.5 px-3 font-black">{idx + 1}위</td>
+                    <td className="py-2.5 px-3 font-sans font-black">{r.studentName} ({r.studentNum})</td>
+                    <td className="py-2.5 px-3 font-sans">{r.jobTitle}</td>
+                    <td className="py-2.5 px-3">{Number(r.initialInvestment).toLocaleString()}원</td>
+                    <td className="py-2.5 px-3 font-black text-[#D63031]">{Number(r.finalTotalAsset).toLocaleString()}원</td>
+                    <td className="py-2.5 px-3 font-black">{r.profitRate >= 0 ? '+' : ''}{r.profitRate.toFixed(2)}%</td>
+                    <td className="py-2.5 px-3 text-center">
+                      <PixelButton variant="primary" size="sm" onClick={() => downloadCanvasCertificate(r)}>
+                        PNG 저장
+                      </PixelButton>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </PixelCard>
+      );
+    }
+
+    // =========================================================================
+    // 9. Student Main View & Controller
+    // =========================================================================
+    function StudentMainView({
+      sessionId,
+      setSessionId,
+      student,
+      setStudent,
+      studentView,
+      setStudentView,
+      sessionData,
+      companiesList,
+      newsList,
+      quizzesList,
+      jobsList,
+      selectedJob,
+      setSelectedJob,
+      quizBonus,
+      setQuizBonus,
+      myAsset,
+      setMyAsset,
+      currentQuizIdx,
+      setCurrentQuizIdx,
+      quizSelectedOption,
+      setQuizSelectedOption,
+      quizSubmitted,
+      setQuizSubmitted,
+      livingPct,
+      setLivingPct,
+      savingsPct,
+      setSavingsPct,
+      investPct,
+      setInvestPct,
+    }) {
+      const [inputCode, setInputCode] = useState(sessionId || '');
+      const [name, setName] = useState('');
+      const [studentNum, setStudentNum] = useState('');
+      const [loginError, setLoginError] = useState('');
+
+      // Stock Trading State
+      const [selectedComp, setSelectedComp] = useState(null);
+      const [tradeQty, setTradeQty] = useState(1);
+      const [tradeMsg, setTradeMsg] = useState('');
+
+      const handleStudentLogin = async () => {
+        if (!inputCode || !name || !studentNum) {
+          setLoginError('세션코드, 이름, 학번을 모두 입력해주세요.');
+          return;
+        }
+        try {
+          const res = await callGAS('apiStudentLogin', inputCode, name, studentNum);
+          if (res && res.ok) {
+            playSound('success');
+            setSessionId(inputCode.toUpperCase());
+            setStudent(res.student);
+            setStudentView('lobby');
+          } else {
+            playSound('buzzer');
+            setLoginError(res.message || '로그인에 실패했습니다.');
+          }
+        } catch (e) {
+          setLoginError('서버 연결 중 오류가 발생했습니다.');
+        }
+      };
+
+      // Student Login Screen
+      if (!student) {
+        return (
+          <div className="max-w-md mx-auto py-12 space-y-6">
+            <PixelCard variant="cyan" className="p-6 space-y-4">
+              <div className="text-center space-y-1">
+                <span className="text-4xl">🧑‍🎓</span>
+                <h3 className="text-xl font-black">학생 금융 캠프 로그인</h3>
+                <p className="text-xs text-[#636E72] font-bold">선생님이 알려주신 세션 코드를 입력하세요.</p>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <div>
+                  <label className="text-xs font-black block mb-1">세션 코드 (4자리)</label>
+                  <input
+                    type="text"
+                    value={inputCode}
+                    onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+                    className="w-full bg-white border-2 border-black rounded-xl px-3 py-2 text-sm font-mono font-black outline-none uppercase"
+                    placeholder="예: FC1234"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-black block mb-1">학생 이름</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full bg-white border-2 border-black rounded-xl px-3 py-2 text-sm font-bold outline-none"
+                    placeholder="예: 홍길동"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-black block mb-1">학번</label>
+                  <input
+                    type="text"
+                    value={studentNum}
+                    onChange={(e) => setStudentNum(e.target.value)}
+                    className="w-full bg-white border-2 border-black rounded-xl px-3 py-2 text-sm font-mono font-bold outline-none"
+                    placeholder="예: 20101"
+                  />
+                </div>
+
+                {loginError && <p className="text-xs text-[#D63031] font-black text-center">{loginError}</p>}
+
+                <PixelButton variant="primary" size="lg" className="w-full mt-2" onClick={handleStudentLogin}>
+                  캠프 입장하기 ➔
+                </PixelButton>
+              </div>
+            </PixelCard>
+          </div>
+        );
+      }
+
+      const activeModule = sessionData?.['현재모듈'] || 'lobby';
+      const curRound = Number(sessionData?.['주식_현재라운드'] || 1);
+      const curStockState = sessionData?.['주식_상태'] || 'waiting';
+
+      // 1. Lobby View
+      if (activeModule === 'lobby') {
+        return (
+          <div className="max-w-xl mx-auto py-12 text-center space-y-6">
+            <PixelCard variant="gold" className="p-8 space-y-4">
+              <span className="text-5xl animate-bounce inline-block">⏳</span>
+              <h3 className="text-2xl font-black text-[#2D3436]">
+                {student.name} ({student.studentNum})님 환영합니다!
+              </h3>
+              <p className="text-xs sm:text-sm text-[#636E72] font-bold leading-relaxed">
+                현재 대기실입니다. 선생님께서 다음 활동(1단계 퀴즈)을 시작하실 때까지 잠시만 기다려주세요.
+              </p>
+              <div className="pt-2">
+                <PixelBadge variant="green">준비 완료 • 세션 연결됨</PixelBadge>
+              </div>
+            </PixelCard>
+          </div>
+        );
+      }
+
+      // 2. Quiz View
+      if (activeModule === 'quiz') {
+        const quiz = quizzesList[currentQuizIdx] || quizzesList[0];
+        const isCorrect = quizSelectedOption === quiz.정답;
+
+        const handleAnswer = async (optKey) => {
+          if (quizSubmitted) return;
+          setQuizSelectedOption(optKey);
+          setQuizSubmitted(true);
+
+          if (optKey === quiz.정답) {
+            playSound('coin');
+            setQuizBonus((prev) => prev + 50000);
+            await callGAS('apiGiveQuizBonus', sessionId, student.studentId, 50000);
+          } else {
+            playSound('buzzer');
+          }
+        };
+
+        return (
+          <div className="max-w-2xl mx-auto space-y-6">
+            <PixelCard variant="white" className="p-6 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b-2 border-black">
+                <PixelBadge variant="gold">QUIZ {currentQuizIdx + 1} / {quizzesList.length}</PixelBadge>
+                <span className="text-xs font-black text-[#00B894] font-mono">적립 보너스: +{quizBonus.toLocaleString()}원</span>
+              </div>
+
+              <h3 className="text-lg font-black text-[#2D3436] leading-snug">{quiz.문제}</h3>
+
+              <div className="grid grid-cols-1 gap-2.5 pt-2">
+                {['보기1', '보기2', '보기3', '보기4'].map((k) => {
+                  const val = quiz[k];
+                  if (!val) return null;
+                  const isSelected = quizSelectedOption === k;
+                  const isAnswer = quiz.정답 === k;
+
+                  let btnStyle = 'bg-white hover:bg-[#F8F9FA]';
+                  if (quizSubmitted) {
+                    if (isAnswer) btnStyle = 'bg-[#EBFBF7] border-[#00B894] text-[#00B894]';
+                    else if (isSelected && !isAnswer) btnStyle = 'bg-[#FFF0F0] border-[#D63031] text-[#D63031]';
+                  } else if (isSelected) {
+                    btnStyle = 'bg-[#FFD32D]';
+                  }
+
+                  return (
+                    <button
+                      key={k}
+                      disabled={quizSubmitted}
+                      onClick={() => handleAnswer(k)}
+                      className={`w-full text-left p-3.5 rounded-xl border-2 border-black font-bold text-xs transition-all shadow-[2px_2px_0px_0px_#000] ${btnStyle}`}
+                    >
+                      <span className="font-mono font-black mr-2">[{k.replace('보기', '')}]</span>
+                      <span>{val}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {quizSubmitted && (
+                <div className={`p-4 rounded-xl border-2 border-black text-xs space-y-1 ${isCorrect ? 'bg-[#EBFBF7] text-[#00B894]' : 'bg-[#FFF0F0] text-[#D63031]'}`}>
+                  <div className="font-black">{isCorrect ? '🎉 정답입니다! (+50,000원 보너스 적립)' : '❌ 아쉽습니다! 오답입니다.'}</div>
+                  <div className="text-[11px] text-[#636E72] font-bold">💡 해설: {quiz.해설}</div>
+                </div>
+              )}
+
+              {quizSubmitted && currentQuizIdx < quizzesList.length - 1 && (
+                <PixelButton
+                  variant="primary"
+                  size="md"
+                  className="w-full"
+                  onClick={() => {
+                    setCurrentQuizIdx(currentQuizIdx + 1);
+                    setQuizSelectedOption(null);
+                    setQuizSubmitted(false);
+                  }}
+                >
+                  다음 퀴즈 풀기 ➔
+                </PixelButton>
+              )}
+            </PixelCard>
+          </div>
+        );
+      }
+
+      // 3. Budget View (3통장 배분)
+      if (activeModule === 'budget') {
+        const job = selectedJob || jobsList[0];
+        const grossSalary = Number(job.월기본급 || 2400000);
+        const deduction = Math.round(grossSalary * 0.12); // ~12% 공제
+        const netSalary = grossSalary - deduction;
+        const totalAvailable = netSalary + quizBonus;
+
+        const livingAmount = Math.round((totalAvailable * livingPct) / 100);
+        const savingsAmount = Math.round((totalAvailable * savingsPct) / 100);
+        const investAmount = Math.round((totalAvailable * investPct) / 100);
+
+        const handleSaveBudget = async () => {
+          if (livingPct + savingsPct + investPct !== 100) {
+            alert('3개 통장 배분의 합계는 반드시 100%여야 합니다.');
+            return;
+          }
+          playSound('success');
+          setMyAsset({ ...myAsset, cash: investAmount, initialInvestment: investAmount });
+
+          await callGAS('apiSaveBudget', {
+            sessionId: sessionId,
+            studentId: student.studentId,
+            jobTitle: job.직업명,
+            preTax: grossSalary,
+            postTax: netSalary,
+            quizBonus: quizBonus,
+            totalAvailable: totalAvailable,
+            living: livingAmount,
+            savings: savingsAmount,
+            invest: investAmount,
+          });
+
+          alert('3통장 배분이 구글 시트에 안전하게 저장되었습니다!');
+        };
+
+        return (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <PixelCard variant="gold" className="p-6 space-y-4">
+              <h3 className="text-xl font-black">2단계: 나의 직업 선택 & 3통장 예산 배분</h3>
+              <p className="text-xs text-[#636E72] font-bold">
+                직업을 선택하여 세후 월급을 수령하고, 퀴즈 보너스를 합산하여 생활비/저축/투자 통장에 배분하세요. (투자 통장 잔액이 3단계 모의주식 시드머니가 됩니다.)
+              </p>
+
+              {/* Job Selector */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                {jobsList.map((j, idx) => {
+                  const isSel = (selectedJob ? selectedJob.직업ID : jobsList[0].직업ID) === j.직업ID;
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        playSound('select');
+                        setSelectedJob(j);
+                      }}
+                      className={`p-3 rounded-2xl border-2 border-black cursor-pointer select-none transition-all shadow-[2px_2px_0px_0px_#000] ${
+                        isSel ? 'bg-[#FFD32D] scale-105' : 'bg-white hover:bg-[#F8F9FA]'
+                      }`}
+                    >
+                      <div className="font-black text-xs text-[#2D3436]">{j.직업명}</div>
+                      <div className="text-xs font-mono font-black text-[#D63031] mt-0.5">{Number(j.월기본급).toLocaleString()}원</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </PixelCard>
+
+            {/* Payslip & 3-Pocket Sliders */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <PixelCard className="p-5 space-y-3 font-mono text-xs">
+                <h4 className="font-black text-sm font-sans">📄 월급여 명세서 (Payslip)</h4>
+                <div className="flex justify-between py-1 border-b">
+                  <span className="text-[#636E72]">세전 기본급:</span>
+                  <span className="font-black">{grossSalary.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between py-1 border-b text-[#D63031]">
+                  <span>4대보험 및 세금 공제 (~12%):</span>
+                  <span>-{deduction.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between py-1 border-b text-[#00B894]">
+                  <span>1단계 퀴즈 보너스 적립금:</span>
+                  <span>+{quizBonus.toLocaleString()}원</span>
+                </div>
+                <div className="flex justify-between py-2 border-t-2 border-black font-black text-sm text-[#2D3436]">
+                  <span>총 가용자금 (배분 대상):</span>
+                  <span className="text-[#D63031]">{totalAvailable.toLocaleString()}원</span>
+                </div>
+              </PixelCard>
+
+              <PixelCard variant="cyan" className="p-5 space-y-4">
+                <h4 className="font-black text-sm">💰 3개 통장 배분 슬라이더 (합계: {livingPct + savingsPct + investPct}%)</h4>
+                <div className="space-y-3 text-xs font-bold">
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span>1. 생활비 통장 ({livingPct}%):</span>
+                      <span className="font-mono font-black text-[#D63031]">{livingAmount.toLocaleString()}원</span>
+                    </div>
+                    <input type="range" min="0" max="100" step="5" value={livingPct} onChange={(e) => setLivingPct(Number(e.target.value))} className="w-full" />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span>2. 저축 통장 ({savingsPct}%):</span>
+                      <span className="font-mono font-black text-[#00B894]">{savingsAmount.toLocaleString()}원</span>
+                    </div>
+                    <input type="range" min="0" max="100" step="5" value={savingsPct} onChange={(e) => setSavingsPct(Number(e.target.value))} className="w-full" />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span>3. 투자 통장 (모의주식 시드머니) ({investPct}%):</span>
+                      <span className="font-mono font-black text-[#0984E3]">{investAmount.toLocaleString()}원</span>
+                    </div>
+                    <input type="range" min="0" max="100" step="5" value={investPct} onChange={(e) => setInvestPct(Number(e.target.value))} className="w-full" />
+                  </div>
+                </div>
+
+                <PixelButton variant="gold" size="lg" className="w-full" onClick={handleSaveBudget}>
+                  3통장 배분 완료 & 시트에 저장 ➔
+                </PixelButton>
+              </PixelCard>
+            </div>
+          </div>
+        );
+      }
+
+      // 4. Stock Market Trading View (6라운드)
+      if (activeModule === 'stock') {
+        const handleTrade = async (comp, type) => {
+          if (curStockState !== 'trading') return;
+          const unitP = Number(comp.현재가 || comp.초기가 || 5000);
+          const totalAmt = unitP * tradeQty;
+
+          if (type === 'BUY' && (myAsset.cash || 0) < totalAmt) {
+            playSound('buzzer');
+            setTradeMsg('보유 현금이 부족합니다.');
+            return;
+          }
+
+          playSound('trade');
+          setTradeMsg(`${comp.기업명} ${tradeQty}주 ${type === 'BUY' ? '매수' : '매도'} 체결 요청 완료!`);
+
+          await callGAS('apiTradeStock', {
+            sessionId: sessionId,
+            studentId: student.studentId,
+            studentName: student.name,
+            round: curRound,
+            companyName: comp.기업명,
+            tradeType: type,
+            quantity: tradeQty,
+            unitPrice: unitP,
+          });
+
+          setSelectedComp(null);
+        };
+
+        return (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            {/* My Asset Banner */}
+            <PixelCard variant="gold" className="p-5 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <span className="text-[11px] font-black text-[#636E72] uppercase">내 모의주식 투자 자산</span>
+                <div className="text-3xl font-black font-mono text-[#2D3436]">
+                  {(myAsset.totalAsset || myAsset.cash || 500000).toLocaleString()}<span className="text-lg text-[#D63031] ml-1">원</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-xs font-mono">
+                <div>
+                  <span className="text-[#636E72] block">보유 현금:</span>
+                  <span className="font-black text-sm">{(myAsset.cash || 0).toLocaleString()}원</span>
+                </div>
+                <div>
+                  <span className="text-[#636E72] block">진행 상태:</span>
+                  <PixelBadge variant={curStockState === 'trading' ? 'green' : 'slate'}>
+                    R{curRound} {curStockState === 'trading' ? '거래 오픈중' : curStockState === 'news' ? '뉴스 오픈' : '대기'}
+                  </PixelBadge>
+                </div>
+              </div>
+            </PixelCard>
+
+            {tradeMsg && (
+              <div className="p-3 rounded-xl bg-[#EBFBF7] border-2 border-black text-[#00B894] font-black text-xs text-center shadow-[2px_2px_0px_0px_#000]">
+                {tradeMsg}
+              </div>
+            )}
+
+            {/* 6 Mystery News Grid */}
+            <PixelCard className="p-5 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b-2 border-black">
+                <h3 className="font-black text-base">R{curRound} 뉴스 속보</h3>
+                <span className="text-xs text-[#636E72] font-bold">기사를 분석하고 매매 결정을 내리세요!</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {newsList.slice(0, 2).map((n, idx) => (
+                  <div key={idx} className="p-3.5 rounded-xl border-2 border-black bg-[#FFF0F0] text-xs space-y-1 shadow-[2px_2px_0px_0px_#000]">
+                    <div className="flex justify-between font-black">
+                      <PixelBadge variant="red">{n.대상기업}</PixelBadge>
+                      <span className="text-[#D63031] font-mono">+{n.등락률}% 호재</span>
+                    </div>
+                    <p className="font-bold text-[#2D3436] pt-1">{n.뉴스본문}</p>
+                  </div>
+                ))}
+              </div>
+            </PixelCard>
+
+            {/* 10 Listed Company Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {companiesList.map((c, idx) => {
+                const price = Number(c.현재가 || c.초기가 || 5000);
+                const isSelected = selectedComp?.id === c.id;
+
+                return (
+                  <div key={idx} className="p-4 rounded-2xl border-4 border-black bg-white shadow-[4px_4px_0px_0px_#000] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">{c.icon || '🏢'}</span>
+                        <div>
+                          <h4 className="font-black text-base">{c.기업명}</h4>
+                          <span className="text-[10px] text-[#636E72] font-bold">{c.업종}</span>
+                        </div>
+                      </div>
+                      <div className="text-right font-mono">
+                        <div className="font-black text-base text-[#D63031]">{price.toLocaleString()}원</div>
+                      </div>
+                    </div>
+
+                    {isSelected ? (
+                      <div className="pt-2 border-t-2 border-black space-y-2">
+                        <div className="flex items-center justify-between text-xs font-bold">
+                          <span>수량:</span>
+                          <div className="flex items-center gap-1 font-mono">
+                            {[1, 5, 10].map((q) => (
+                              <button
+                                key={q}
+                                onClick={() => setTradeQty(q)}
+                                className={`px-2 py-0.5 rounded border border-black text-xs font-black ${tradeQty === q ? 'bg-[#FFD32D]' : 'bg-white'}`}
+                              >
+                                {q}주
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <PixelButton variant="danger" size="sm" disabled={curStockState !== 'trading'} onClick={() => handleTrade(c, 'BUY')}>
+                            매수 (사기)
+                          </PixelButton>
+                          <PixelButton variant="primary" size="sm" disabled={curStockState !== 'trading'} onClick={() => handleTrade(c, 'SELL')}>
+                            매도 (팔기)
+                          </PixelButton>
+                        </div>
+                      </div>
+                    ) : (
+                      <PixelButton variant="secondary" size="sm" className="w-full" onClick={() => setSelectedComp(c)}>
+                        주문하기 ➔
+                      </PixelButton>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+
+      // 5. Final Report View
+      if (activeModule === 'report') {
+        const reportData = {
+          studentId: student.studentId,
+          studentName: student.name,
+          studentNum: student.studentNum,
+          jobTitle: selectedJob ? selectedJob.직업명 : '금융 투자자',
+          initialInvestment: myAsset.initialInvestment || 500000,
+          finalCash: myAsset.cash || 500000,
+          finalStockValuation: myAsset.totalStockValuation || 0,
+          finalTotalAsset: myAsset.totalAsset || myAsset.cash || 500000,
+          totalProfit: (myAsset.totalAsset || myAsset.cash || 500000) - (myAsset.initialInvestment || 500000),
+          profitRate: myAsset.profitRate || 0,
+          rank: 1,
+          totalStudents: 1,
+        };
+
+        return (
+          <div className="max-w-2xl mx-auto space-y-6 text-center py-6">
+            <PixelCard variant="gold" className="p-8 space-y-6">
+              <div className="space-y-2">
+                <PixelBadge variant="gold">CAMP CERTIFICATE</PixelBadge>
+                <h3 className="text-2xl sm:text-3xl font-black">🎉 금융교육 캠프 수료를 축하합니다!</h3>
+                <p className="text-xs text-[#636E72] font-bold">
+                  {student.name} ({student.studentNum})님은 3단계 금융 모듈을 성실히 이수하셨습니다.
+                </p>
+              </div>
+
+              <div className="bg-white p-6 rounded-2xl border-2 border-black space-y-3 font-mono">
+                <div className="text-xs text-[#636E72] font-sans font-black">최종 투자 수익률</div>
+                <div className="text-4xl font-black text-[#D63031]">
+                  {reportData.profitRate >= 0 ? '+' : ''}{reportData.profitRate.toFixed(2)}%
+                </div>
+                <div className="text-xs text-[#636E72]">
+                  최종 평가자산: {reportData.finalTotalAsset.toLocaleString()}원
+                </div>
+              </div>
+
+              <PixelButton
+                variant="gold"
+                size="lg"
+                className="w-full"
+                onClick={() => {
+                  playSound('success');
+                  try {
+                    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                  } catch (e) {}
+                  downloadCanvasCertificate(reportData);
+                }}
+              >
+                📜 수료증 & 성적표 이미지 다운로드 (PNG)
+              </PixelButton>
+            </PixelCard>
+          </div>
+        );
+      }
+
+      return null;
+    }
+
+    // React Mount
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>

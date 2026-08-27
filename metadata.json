@@ -1,0 +1,8 @@
+{
+  "name": "금융교육 캠프 모의주식 웹앱",
+  "description": "상업고등학교 학생들을 위한 2D 게임풍 금융교육 모의주식 웹앱 (퀴즈, 통장배분, 6라운드 모의주식 시뮬레이션, 실시간 강사-학생 연동)",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
