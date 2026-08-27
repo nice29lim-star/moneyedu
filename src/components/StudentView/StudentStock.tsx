@@ -82,7 +82,12 @@ export const StudentStock: React.FC<StudentStockProps> = ({
       );
       const pollData = await pollRes.json();
       if (pollData.ok) {
-        setCompanies(pollData.companies || syncManager.getCompanies(session.sessionId));
+        if (pollData.companies && pollData.companies.length > 0) {
+          syncManager.saveCompanies(session.sessionId, pollData.companies);
+          setCompanies(pollData.companies);
+        } else {
+          setCompanies(syncManager.getCompanies(session.sessionId));
+        }
         const newsList = pollData.revealedNews || [];
         setRevealedNews(newsList);
         setSlots(pollData.slots || session.activeNewsSlots || []);

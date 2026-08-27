@@ -462,6 +462,10 @@ export class AppStore {
       student = this.addStudent(sessionId, studentId, `학생_${studentId.substring(0, 4)}`);
     }
 
+    if (student.lastTradeRound === session.stockRound) {
+      return { ok: false, message: '이번 라운드에는 이미 매매를 완료했습니다.' };
+    }
+
     if (quantity <= 0 || !Number.isInteger(quantity)) {
       return { ok: false, message: '수량은 1주 이상 정수여야 합니다.' };
     }

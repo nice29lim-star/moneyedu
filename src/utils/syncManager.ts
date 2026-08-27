@@ -1073,17 +1073,24 @@ export const syncManager = {
 
     const companies = syncManager.getCompanies(cleanSession);
     const companyName = typeof companyOrName === 'string' ? companyOrName : companyOrName.name;
-    const company = companies.find(c => c.name === companyName) || (typeof companyOrName === 'object' ? companyOrName : {
-      id: 1,
-      name: companyName,
-      code: 'KRX',
-      industry: '일반',
-      currentPrice: 50000,
-      initialPrice: 50000,
-      changeRate: 0,
-      priceHistory: [50000],
-      icon: '🏢',
-    });
+    
+    // UI에서 전달된 최신 회사 객체가 있으면 우선 사용, 없으면 캐시 참조
+    let company: Company;
+    if (typeof companyOrName === 'object' && 'currentPrice' in companyOrName) {
+      company = companyOrName as Company;
+    } else {
+      company = companies.find(c => c.name === companyName) || {
+        id: 1,
+        name: companyName,
+        code: 'KRX',
+        industry: '일반',
+        currentPrice: 50000,
+        initialPrice: 50000,
+        changeRate: 0,
+        priceHistory: [50000],
+        icon: '🏢',
+      };
+    }
 
     const currentRound = typeof currentRoundParam === 'number' ? currentRoundParam : (typeof studentNameOrRound === 'number' ? studentNameOrRound : (syncManager.getSession(cleanSession)?.stockRound ?? 1));
 
