@@ -82,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <span>👨‍🏫</span>
                   <span>강사 관리자 모드</span>
                 </span>
-              ) : student ? (
+              ) : (student && !isLanding && currentView !== 'student-login') ? (
                 <span>ID: <strong className="text-[#2D3436]">{student.name} ({student.studentNum})</strong></span>
               ) : (
                 <span>상업계 고등학교 2D 레트로 금융교육 캠프</span>
@@ -158,7 +158,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Student Info / Logout & Balance Display */}
-          {student && !isTeacherView && (
+          {student && !isTeacherView && !isLanding && currentView !== 'student-login' && (
             <div className="flex items-center gap-1.5">
               {/* Cash Balance Display */}
               <div
