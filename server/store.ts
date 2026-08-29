@@ -130,8 +130,8 @@ export class AppStore {
       studentNum: '01',
       loginTime: Date.now(),
       quizBonus: 0,
-      cash: 1000000,
-      initialInvestment: 1000000,
+      cash: 0,
+      initialInvestment: 0,
     };
     this.students.set(key, student);
     return student;

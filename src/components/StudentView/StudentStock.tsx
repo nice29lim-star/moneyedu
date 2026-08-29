@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Company, NewsItem, Session, Student, StudentAsset } from '../../types';
 import { PixelBadge, PixelButton, PixelCard } from '../PixelUI';
+import { CompanyChart } from '../CompanyChart';
 import {
   playCoinSound,
   playFlipSound,
@@ -283,10 +284,26 @@ export const StudentStock: React.FC<StudentStockProps> = ({
               >
                 <span className="flex items-center gap-1.5 text-xs font-black animate-pulse">
                   <Newspaper size={14} />
-                  <span>📰 이번 라운드 뉴스 ({revealedNews.length}건)</span>
+                  <span>📰 이번 라운드 뉴스 ({revealedNews.filter(n => n.targetRound === currentRound).length}건)</span>
                 </span>
               </PixelButton>
             )}
+
+            {/* View Investment Report Button */}
+            <PixelButton
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                playSelectSound();
+                setRoundResultData({ round: currentRound, profit: myAsset?.profitAmount || 0, profitRate: myAsset?.profitRate || 0 });
+                setShowRoundResultModal(true);
+              }}
+            >
+              <span className="flex items-center gap-1.5 text-xs font-black">
+                <TrendingUp size={14} />
+                <span>📊 투자리포트 보기</span>
+              </span>
+            </PixelButton>
 
             <PixelBadge
               variant={
@@ -450,55 +467,94 @@ export const StudentStock: React.FC<StudentStockProps> = ({
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
-            {revealedNews.length === 0 ? (
-              <div className="col-span-full py-8 text-center text-[#636E72] font-bold">
+            {revealedNews.filter(n => n.targetRound === currentRound).length === 0 ? (
+              <div className="col-span-full py-8 text-center text-[#636E72] font-bold border-2 border-dashed border-[#DFE6E9] rounded-2xl">
                 뉴스 대기 중입니다...
               </div>
             ) : (
-              revealedNews.map((news, idx) => {
-                const isPositive = news.impact === 'positive';
+              revealedNews
+                .filter(n => n.targetRound === currentRound)
+                .map((news, idx) => {
+                  const isPositive = news.impact === 'positive';
 
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => {
-                      playSelectSound();
-                      setSelectedNewsDetail(news);
-                    }}
-                    className={`min-h-[140px] rounded-2xl border-2 border-black p-3 flex flex-col justify-between transition-all select-none cursor-pointer shadow-[3px_3px_0px_0px_#000] active:scale-95 ${
-                      isPositive
-                        ? 'bg-[#FFF0F0] hover:bg-[#FFE3E3] hover:scale-105'
-                        : 'bg-[#EBF7FF] hover:bg-[#DDF0FF] hover:scale-105'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-white/90 border border-black truncate">
-                          {news.targetCompany}
-                        </span>
-                        <span
-                          className={`text-xs font-black font-mono ${
-                            isPositive ? 'text-[#D63031]' : 'text-[#0984E3]'
-                          }`}
-                        >
-                          {isPositive ? '▲ +' : '▼ '}{Math.abs(news.impactRate)}%
-                        </span>
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        playSelectSound();
+                        setSelectedNewsDetail(news);
+                      }}
+                      className={`min-h-[140px] rounded-2xl border-2 border-black p-3 flex flex-col justify-between transition-all select-none cursor-pointer shadow-[3px_3px_0px_0px_#000] active:scale-95 ${
+                        isPositive
+                          ? 'bg-[#FFF0F0] hover:bg-[#FFE3E3] hover:scale-105'
+                          : 'bg-[#EBF7FF] hover:bg-[#DDF0FF] hover:scale-105'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-white/90 border border-black truncate">
+                            {news.targetCompany}
+                          </span>
+                          <span
+                            className={`text-xs font-black font-mono ${
+                              isPositive ? 'text-[#D63031]' : 'text-[#0984E3]'
+                            }`}
+                          >
+                            {isPositive ? '▲ +' : '▼ '}{Math.abs(news.impactRate)}%
+                          </span>
+                        </div>
+
+                        <p className="text-xs font-black text-[#2D3436] leading-snug line-clamp-3 my-1" style={{ fontFamily: 'serif' }}>
+                          {news.title}
+                        </p>
                       </div>
 
-                      <p className="text-xs font-black text-[#2D3436] leading-snug line-clamp-3 my-1">
-                        {news.title}
-                      </p>
+                      <div className="pt-2 border-t border-black/10 text-[10px] text-[#D63031] font-mono font-black text-right flex items-center justify-between">
+                        <span className="text-[#636E72]">{currentRound === 0 ? '초기 속보' : `${currentRound}라운드 속보`}</span>
+                        <span className="flex items-center gap-0.5">상세보기 ➔</span>
+                      </div>
                     </div>
-
-                    <div className="pt-2 border-t border-black/10 text-[10px] text-[#D63031] font-mono font-black text-right flex items-center justify-between">
-                      <span className="text-[#636E72]">기사 #{idx + 1}</span>
-                      <span className="flex items-center gap-0.5">상세보기 ➔</span>
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                })
             )}
           </div>
+
+          {/* Past Round News */}
+          {revealedNews.filter(n => n.targetRound < currentRound).length > 0 && (
+            <div className="mt-4 pt-4 border-t-2 border-dashed border-[#DFE6E9]">
+              <h4 className="text-xs font-bold text-[#636E72] mb-2 flex items-center gap-1">
+                <RefreshCw size={12} />
+                지난 라운드 기사
+              </h4>
+              <div className="flex flex-col gap-2">
+                {revealedNews
+                  .filter(n => n.targetRound < currentRound)
+                  .sort((a, b) => b.targetRound - a.targetRound)
+                  .map((news, idx) => (
+                    <div
+                      key={`past-${idx}`}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-xl border-2 border-[#DFE6E9] bg-[#F8F9FA] hover:border-black hover:bg-white transition-colors cursor-pointer"
+                      onClick={() => {
+                        playSelectSound();
+                        setSelectedNewsDetail(news);
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-2 sm:mb-0">
+                        <span className="text-[10px] font-mono font-black bg-white px-1.5 py-0.5 rounded border border-[#B2BEC3] text-[#636E72]">
+                          R{news.targetRound}
+                        </span>
+                        <span className="text-[11px] font-bold text-[#2D3436] truncate max-w-[200px]">
+                          {news.title}
+                        </span>
+                      </div>
+                      <PixelButton variant="secondary" size="sm" className="shrink-0 text-[10px] py-1 px-2">
+                        뉴스보기
+                      </PixelButton>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
         </PixelCard>
       )}
 
@@ -579,25 +635,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                 </div>
 
                 {/* Price History Sparkline */}
-                <div className="h-10 bg-[#FFFBEB] rounded-xl p-1.5 flex items-end justify-between gap-1 border-2 border-black">
-                  {c.priceHistory.map((p, pIdx) => {
-                    const min = Math.min(...c.priceHistory) * 0.9;
-                    const max = Math.max(...c.priceHistory) * 1.1;
-                    const heightPercent = Math.max(15, Math.min(100, ((p - min) / (max - min)) * 100));
-                    return (
-                      <div
-                        key={pIdx}
-                        style={{ height: `${heightPercent}%` }}
-                        className={`flex-1 rounded-t transition-all ${
-                          pIdx === c.priceHistory.length - 1
-                            ? 'bg-[#FFD32D] border-t border-black'
-                            : 'bg-[#A4B0BE]'
-                        }`}
-                        title={`R${pIdx}: ${p.toLocaleString()}원`}
-                      />
-                    );
-                  })}
-                </div>
+                <CompanyChart company={c} />
 
                 {/* My Holdings in this Company */}
                 <div className="bg-[#F8F9FA] p-2.5 rounded-xl border-2 border-black text-xs font-mono flex justify-between items-center text-[#2D3436]">
@@ -838,39 +876,37 @@ export const StudentStock: React.FC<StudentStockProps> = ({
       {/* Modal 2: Initial 6 Overview Market News Modal */}
       {showInitialNewsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-200">
-          <PixelCard className="bg-white border-4 border-black p-5 sm:p-7 max-w-3xl w-full space-y-5 rounded-3xl shadow-[12px_12px_0px_0px_#000] text-[#2D3436] my-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-black">
-              <div className="flex items-center gap-2">
-                <PixelBadge variant="gold">초기 시장 브리핑</PixelBadge>
-                <h3 className="text-base font-black text-[#2D3436]">
-                  📰 모의주식 시작 전 6대 핵심 산업 기사
+          <PixelCard className="bg-[#F4F1EA] border-4 border-black p-5 sm:p-7 max-w-3xl w-full space-y-5 rounded-xl shadow-[12px_12px_0px_0px_#000] text-[#2D3436] my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b-4 border-black">
+              <div className="flex flex-col">
+                <h3 className="text-2xl font-black text-[#2D3436] tracking-tighter" style={{ fontFamily: 'serif' }}>
+                  THE MONEY EDU TIMES
                 </h3>
+                <span className="text-xs font-bold text-[#636E72] mt-1">초기 시장 브리핑 (R0)</span>
               </div>
               <button
                 onClick={() => setShowInitialNewsModal(false)}
-                className="p-1 rounded-lg hover:bg-[#F8F9FA] border border-black font-black"
+                className="p-1 rounded-lg hover:bg-black/5 border-2 border-transparent hover:border-black transition-all"
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-xs text-[#636E72] font-bold">
-              모의주식 시작 전 시장의 전반적인 동향을 파악할 수 있는 6대 주요 기사입니다.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {initialOverviewNews.map((n) => {
                 const isPos = n.impact === 'positive';
                 return (
                   <div
                     key={n.id}
-                    className={`p-3.5 rounded-2xl border-2 border-black flex flex-col justify-between ${
-                      isPos ? 'bg-[#FFF8F8]' : 'bg-[#F0F8FF]'
-                    }`}
+                    className="p-4 rounded-xl bg-white border border-[#D1CCC0] flex flex-col justify-between shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 transition-all cursor-pointer"
+                    onClick={() => {
+                      playSelectSound();
+                      setSelectedNewsDetail(n);
+                    }}
                   >
                     <div>
-                      <div className="flex items-center justify-between text-[11px] font-black mb-1">
-                        <span className="text-[#2D3436] font-mono bg-white px-2 py-0.5 rounded border border-black">
+                      <div className="flex items-center justify-between text-[11px] font-black mb-2 border-b border-dashed border-[#D1CCC0] pb-2">
+                        <span className="text-[#2D3436] font-mono font-bold">
                           {n.targetCompany}
                         </span>
                         <span className={isPos ? 'text-[#D63031]' : 'text-[#0984E3]'}>
@@ -921,11 +957,11 @@ export const StudentStock: React.FC<StudentStockProps> = ({
               <div className="flex justify-between items-center text-xs">
                 <span className="text-[#636E72] font-bold">내 총 평가 자산:</span>
                 <span className="font-mono font-black text-base text-[#2D3436]">
-                  {(myAsset?.totalAsset ?? 1000000).toLocaleString()}원
+                  {(myAsset?.totalAsset ?? 0).toLocaleString()}원
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-[#636E72] font-bold">누적 순수익:</span>
+                <span className="text-[#636E72] font-bold">초기 투자금 대비 누적 수익:</span>
                 <span
                   className={`font-mono font-black text-sm ${
                     (myAsset?.profitAmount ?? 0) >= 0 ? 'text-[#D63031]' : 'text-[#0984E3]'
@@ -948,8 +984,18 @@ export const StudentStock: React.FC<StudentStockProps> = ({
               </div>
             </div>
 
-            <p className="text-xs text-[#636E72] font-bold">
-              강사님이 다음 라운드 뉴스를 전송할 때까지 잠시 대기해주세요!
+            <div className="p-3 bg-[#F8F9FA] rounded-xl border border-[#DFE6E9] text-xs text-left leading-relaxed text-[#2D3436] font-medium">
+              {(myAsset?.profitAmount ?? 0) > 0 ? (
+                <span>🎉 <strong>축하합니다!</strong> 초기 자산 대비 <span className="text-[#D63031]">{(myAsset?.profitAmount ?? 0).toLocaleString()}원</span>의 이익을 얻었습니다. 어떤 뉴스가 호재로 작용했는지 분석해보세요.</span>
+              ) : (myAsset?.profitAmount ?? 0) < 0 ? (
+                <span>📉 <strong>아쉽습니다.</strong> 초기 자산 대비 <span className="text-[#0984E3]">{Math.abs((myAsset?.profitAmount ?? 0)).toLocaleString()}원</span>의 손실이 발생했습니다. 투자 종목의 관련 악재 뉴스를 다시 한 번 꼼꼼히 확인해보세요!</span>
+              ) : (
+                <span>⚖️ <strong>자산 유지 중!</strong> 아직 이익도 손실도 발생하지 않았습니다. 이번 라운드에 과감하게 투자해보는 것은 어떨까요?</span>
+              )}
+            </div>
+
+            <p className="text-[11px] text-[#636E72] font-bold">
+              💡 창을 닫은 후에도 언제든 <strong>[투자리포트 보기]</strong> 메뉴에서 다시 확인할 수 있습니다.
             </p>
 
             <PixelButton
@@ -966,50 +1012,45 @@ export const StudentStock: React.FC<StudentStockProps> = ({
 
       {/* Modal 4: Single News Detail View Modal */}
       {selectedNewsDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <PixelCard className="bg-white border-4 border-black p-6 max-w-lg w-full space-y-4 rounded-3xl shadow-[10px_10px_0px_0px_#000] text-[#2D3436]">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-black">
-              <PixelBadge variant={selectedNewsDetail.impact === 'positive' ? 'red' : 'blue'}>
-                {selectedNewsDetail.targetCompany} 속보
-              </PixelBadge>
-              <button
-                type="button"
-                onClick={() => setSelectedNewsDetail(null)}
-                className="text-[#636E72] hover:text-[#2D3436] font-black text-lg"
-              >
-                ✕
-              </button>
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#F4F1EA] border-4 border-black rounded-xl max-w-2xl w-full p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] space-y-6 animate-in zoom-in-95 cursor-pointer" onClick={() => setSelectedNewsDetail(null)}>
+            <div className="flex items-center justify-between pb-4 border-b-4 border-black">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-mono font-black text-[#636E72] bg-white px-2 py-1 rounded border-2 border-black">
+                  {selectedNewsDetail.targetRound === 0 ? '초기 속보' : `${selectedNewsDetail.targetRound}라운드 속보`}
+                </span>
+              </div>
+              <div className="text-right flex flex-col">
+                <span className="text-xl font-black text-[#2D3436]" style={{ fontFamily: 'serif' }}>THE MONEY EDU TIMES</span>
+                <span className="text-[10px] font-bold text-[#636E72]">Click anywhere to close</span>
+              </div>
             </div>
 
-            <h3 className="text-lg font-black text-[#2D3436] leading-snug">
-              {selectedNewsDetail.title}
-            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-sm font-black border-b-2 border-dashed border-[#D1CCC0] pb-2">
+                <span className="text-[#2D3436] font-mono flex items-center gap-1">
+                  <Building2 size={16} />
+                  기업명: {selectedNewsDetail.targetCompany}
+                </span>
+                <span
+                  className={
+                    selectedNewsDetail.impact === 'positive'
+                      ? 'text-[#D63031]'
+                      : 'text-[#0984E3]'
+                  }
+                >
+                  {selectedNewsDetail.impact === 'positive' ? '▲ 호재' : '▼ 악재'} ({selectedNewsDetail.impact === 'positive' ? '+' : ''}{selectedNewsDetail.impactRate}%)
+                </span>
+              </div>
+              <h3 className="font-black text-2xl text-[#2D3436] leading-snug" style={{ fontFamily: 'serif' }}>
+                {selectedNewsDetail.title}
+              </h3>
 
-            <p className="text-sm text-[#2D3436] font-bold leading-relaxed bg-[#FFFBEB] p-4 rounded-2xl border-2 border-black shadow-[2px_2px_0px_0px_#000]">
-              {selectedNewsDetail.content}
-            </p>
-
-            <div className="flex items-center justify-between text-xs pt-2">
-              <span className="text-[#636E72] font-bold">예상 주가 변동 영향:</span>
-              <span
-                className={`font-mono font-black text-base ${
-                  selectedNewsDetail.impact === 'positive' ? 'text-[#D63031]' : 'text-[#0984E3]'
-                }`}
-              >
-                {selectedNewsDetail.impact === 'positive' ? '+' : ''}
-                {selectedNewsDetail.impactRate}%
-              </span>
+              <div className="pt-2 text-base text-[#2D3436] leading-loose font-medium text-justify" style={{ fontFamily: 'serif' }}>
+                {selectedNewsDetail.content}
+              </div>
             </div>
-
-            <PixelButton
-              variant="secondary"
-              size="sm"
-              className="w-full"
-              onClick={() => setSelectedNewsDetail(null)}
-            >
-              확인 닫기
-            </PixelButton>
-          </PixelCard>
+          </div>
         </div>
       )}
     </div>

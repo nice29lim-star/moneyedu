@@ -25,6 +25,7 @@ import {
   playSelectSound,
   playSuccessSound,
 } from '../../utils/soundEffects';
+import { CompanyChart } from '../CompanyChart';
 import { syncManager } from '../../utils/syncManager';
 import { INITIAL_NEWS_POOL } from '../../data/seedData';
 
@@ -389,7 +390,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
             <div className="text-xs font-black mt-0.5">
               {currentRound === 0 ? (
                 <span className="text-[#D63031]">
-                  {currentState === 'trading' ? '초기 상장 진행중' : '기사 확인 / 상장 대기'}
+                  {currentState === 'trading' ? '초기 상장 진행중' : currentState === 'news' ? '기사 전송 완료' : '세팅 예정'}
                 </span>
               ) : (
                 <span className="text-[#00B894]">세팅 완료 ✓</span>
@@ -746,7 +747,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
                 <th className="py-2.5 px-3 font-black">상장 기준가</th>
                 <th className="py-2.5 px-3 font-black">현재가 ({currentRound === 0 ? '초기' : `R${currentRound}`})</th>
                 <th className="py-2.5 px-3 font-black">직전 대비 등락률</th>
-                <th className="py-2.5 px-3 font-black">기업 주요 사업</th>
+                <th className="py-2.5 px-3 font-black w-[200px]">주가 변동 추이</th>
               </tr>
             </thead>
             <tbody className="divide-y-2 divide-black/10 font-mono">
@@ -789,8 +790,10 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
                         {c.changeRate.toFixed(2)}%
                       </span>
                     </td>
-                    <td className="py-3 px-3 font-sans text-[#636E72] text-xs max-w-xs truncate font-bold">
-                      {c.description}
+                    <td className="py-3 px-3">
+                      <div className="w-[180px]">
+                        <CompanyChart company={c} />
+                      </div>
                     </td>
                   </tr>
                 );
@@ -882,48 +885,49 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
       {showInitialNewsModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white border-4 border-black rounded-3xl max-w-3xl w-full p-6 shadow-[10px_10px_0px_0px_#000] space-y-4 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-black">
-              <div className="flex items-center gap-2">
-                <PixelBadge variant="gold">초기 시장 브리핑</PixelBadge>
-                <h3 className="text-base font-black text-[#2D3436]">
-                  📰 모의주식 시작 전 6대 핵심 산업 기사
+            <div className="flex items-center justify-between pb-3 border-b-4 border-black">
+              <div className="flex flex-col">
+                <h3 className="text-2xl font-black text-[#2D3436] tracking-tighter" style={{ fontFamily: 'serif' }}>
+                  THE MONEY EDU TIMES
                 </h3>
+                <span className="text-xs font-bold text-[#636E72] mt-1">초기 시장 브리핑 (R0)</span>
               </div>
               <button
                 onClick={() => setShowInitialNewsModal(false)}
-                className="p-1 rounded-lg hover:bg-[#F8F9FA] border border-black"
+                className="p-1 rounded-lg hover:bg-[#F8F9FA] border-2 border-transparent hover:border-black transition-all"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            <p className="text-xs text-[#636E72] font-bold">
-              모의주식 첫 시작 전, 시장의 흐름을 파악할 수 있는 6개의 주요 경제 기사입니다. 기사를 읽고 초기 상장을 시작해보세요!
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-[#F4F1EA] p-4 rounded-xl border-2 border-black">
               {initialOverviewNews.map((n, idx) => {
                 const isPos = n.impact === 'positive';
+                // Using expandedNewsId to conditionally zoom a card (simulated by full-screen modal or absolute overlay)
+                const isExpanded = selectedNewsDetail?.id === n.id;
+                
                 return (
                   <div
                     key={n.id}
-                    className={`p-3.5 rounded-2xl border-2 border-black flex flex-col justify-between ${
-                      isPos ? 'bg-[#FFF8F8]' : 'bg-[#F0F8FF]'
-                    }`}
+                    className="p-4 rounded-xl bg-white border border-[#D1CCC0] flex flex-col justify-between shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 transition-all cursor-pointer"
+                    onClick={() => {
+                      playSelectSound();
+                      setSelectedNewsDetail(n); // Enlarge via Modal 3
+                    }}
                   >
                     <div>
-                      <div className="flex items-center justify-between text-[11px] font-black mb-1">
-                        <span className="text-[#2D3436] font-mono bg-white px-2 py-0.5 rounded border border-black">
+                      <div className="flex items-center justify-between text-[11px] font-black mb-2 border-b border-dashed border-[#D1CCC0] pb-2">
+                        <span className="text-[#2D3436] font-mono font-bold">
                           {n.targetCompany}
                         </span>
                         <span className={isPos ? 'text-[#D63031]' : 'text-[#0984E3]'}>
-                          {isPos ? '▲ 호재' : '▼ 악재'} ({n.impactRate}%)
+                          {isPos ? '▲ 호재' : '▼ 악재'}
                         </span>
                       </div>
-                      <h4 className="font-black text-xs text-[#2D3436] mt-1 mb-1 leading-snug">
+                      <h4 className="font-black text-sm text-[#2D3436] mt-2 mb-2 leading-snug" style={{ fontFamily: 'serif' }}>
                         {n.title}
                       </h4>
-                      <p className="text-[11px] text-[#636E72] line-clamp-3 leading-relaxed font-medium">
+                      <p className="text-[11px] text-[#636E72] line-clamp-4 leading-relaxed font-medium">
                         {n.content}
                       </p>
                     </div>
@@ -932,15 +936,31 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
               })}
             </div>
 
-            <div className="pt-2">
+            <div className="flex gap-3 pt-2">
               <PixelButton
-                variant="primary"
-                size="md"
-                className="w-full"
+                variant="secondary"
+                size="lg"
+                className="flex-1"
                 onClick={() => setShowInitialNewsModal(false)}
               >
-                기사 확인 완료 (창 닫기)
+                닫기
               </PixelButton>
+              {currentRound === 0 && currentState === 'waiting' && (
+                <PixelButton
+                  variant="primary"
+                  size="lg"
+                  className="flex-2 animate-pulse"
+                  onClick={() => {
+                    handleSendInitialNews();
+                    setShowInitialNewsModal(false);
+                  }}
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <Send size={18} />
+                    <span>학생들에게 초기 6대 기사 발행하기!</span>
+                  </span>
+                </PixelButton>
+              )}
             </div>
           </div>
         </div>
@@ -948,63 +968,44 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
 
       {/* Modal 3: Single News Detail View Modal */}
       {selectedNewsDetail && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border-4 border-black rounded-3xl max-w-lg w-full p-6 shadow-[8px_8px_0px_0px_#000] space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-black">
-              <div className="flex items-center gap-2">
-                <PixelBadge
-                  variant={selectedNewsDetail.impact === 'positive' ? 'red' : 'blue'}
-                >
-                  {selectedNewsDetail.impact === 'positive' ? '🔥 호재 뉴스' : '💧 악재 뉴스'}
-                </PixelBadge>
-                <span className="text-xs font-mono font-black text-[#636E72]">
-                  {currentRound}라운드 속보
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#F4F1EA] border-4 border-black rounded-xl max-w-2xl w-full p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] space-y-6 animate-in zoom-in-95 cursor-pointer" onClick={() => setSelectedNewsDetail(null)}>
+            <div className="flex items-center justify-between pb-4 border-b-4 border-black">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-mono font-black text-[#636E72] bg-white px-2 py-1 rounded border-2 border-black">
+                  {currentRound === 0 ? '초기 속보' : `${currentRound}라운드 속보`}
                 </span>
               </div>
-              <button
-                onClick={() => setSelectedNewsDetail(null)}
-                className="p-1 rounded-lg hover:bg-[#F8F9FA] border border-black"
-              >
-                <X size={18} />
-              </button>
+              <div className="text-right flex flex-col">
+                <span className="text-xl font-black text-[#2D3436]" style={{ fontFamily: 'serif' }}>THE MONEY EDU TIMES</span>
+                <span className="text-[10px] font-bold text-[#636E72]">Click anywhere to close</span>
+              </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="p-3 rounded-2xl bg-[#FFFBEB] border-2 border-black">
-                <div className="flex items-center justify-between text-xs font-black mb-1">
-                  <span className="text-[#2D3436] flex items-center gap-1">
-                    <Building2 size={14} />
-                    관련 기업: {selectedNewsDetail.targetCompany}
-                  </span>
-                  <span
-                    className={
-                      selectedNewsDetail.impact === 'positive'
-                        ? 'text-[#D63031]'
-                        : 'text-[#0984E3]'
-                    }
-                  >
-                    영향도: {selectedNewsDetail.impact === 'positive' ? '+' : ''}
-                    {selectedNewsDetail.impactRate}%
-                  </span>
-                </div>
-                <h3 className="font-black text-base text-[#2D3436]">
-                  {selectedNewsDetail.title}
-                </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-sm font-black border-b-2 border-dashed border-[#D1CCC0] pb-2">
+                <span className="text-[#2D3436] font-mono flex items-center gap-1">
+                  <Building2 size={16} />
+                  기업명: {selectedNewsDetail.targetCompany}
+                </span>
+                <span
+                  className={
+                    selectedNewsDetail.impact === 'positive'
+                      ? 'text-[#D63031]'
+                      : 'text-[#0984E3]'
+                  }
+                >
+                  {selectedNewsDetail.impact === 'positive' ? '▲ 호재' : '▼ 악재'} ({selectedNewsDetail.impact === 'positive' ? '+' : ''}{selectedNewsDetail.impactRate}%)
+                </span>
               </div>
+              <h3 className="font-black text-2xl text-[#2D3436] leading-snug" style={{ fontFamily: 'serif' }}>
+                {selectedNewsDetail.title}
+              </h3>
 
-              <div className="p-4 rounded-2xl bg-[#F8F9FA] border-2 border-black text-sm text-[#2D3436] leading-relaxed font-medium">
+              <div className="pt-2 text-base text-[#2D3436] leading-loose font-medium text-justify" style={{ fontFamily: 'serif' }}>
                 {selectedNewsDetail.content}
               </div>
             </div>
-
-            <PixelButton
-              variant="primary"
-              size="md"
-              className="w-full"
-              onClick={() => setSelectedNewsDetail(null)}
-            >
-              확인 닫기
-            </PixelButton>
           </div>
         </div>
       )}
