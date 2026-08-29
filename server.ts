@@ -96,6 +96,14 @@ async function startServer() {
 
     if (studentId) {
       studentData = appStore.getStudent(sessionId, studentId);
+      
+      // Auto-recover student if Express server was restarted and memory wiped
+      if (!studentData && studentId.includes('_')) {
+        const [name, studentNum] = studentId.split('_');
+        studentData = appStore.addStudent(sessionId, studentId, name);
+        studentData.studentNum = studentNum;
+      }
+      
       myAsset = appStore.getStudentAsset(sessionId, studentId);
     }
 
@@ -417,8 +425,8 @@ async function startServer() {
       ok: true,
       session,
       message: isInitial
-        ? '초기 상장(거래)이 시작되었습니다! 학생들이 첫 종목을 매수할 수 있습니다.'
-        : `${session.stockRound}라운드 상장(거래)이 시작되었습니다! 학생들은 매수/매도를 1회 진행할 수 있습니다.`,
+        ? '초기 상장(거래)이 시작되었습니다! 학생들이 자유롭게 매매할 수 있습니다.'
+        : `${session.stockRound}라운드 상장(거래)이 시작되었습니다! 학생들은 자유롭게 매수/매도를 진행할 수 있습니다.`,
     });
   });
 

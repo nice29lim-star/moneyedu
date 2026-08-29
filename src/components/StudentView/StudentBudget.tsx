@@ -684,28 +684,9 @@ export const StudentBudget: React.FC<StudentBudgetProps> = ({
               </p>
               
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <PixelButton
-                  variant="primary"
-                  size="lg"
-                  className="w-full sm:w-auto text-sm sm:text-base font-black shadow-[4px_4px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px]"
-                  onClick={() => {
-                    playSelectSound();
-                    if (onGoToStock) onGoToStock();
-                    else onBudgetSaved();
-                  }}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <TrendingUp size={20} />
-                    <span>🚀 3단계 모의주식으로 즉시 넘어가기</span>
-                    <ArrowRight size={18} />
-                  </span>
-                </PixelButton>
-
-                {session?.currentModule !== 'stock' && (
-                  <span className="text-[11px] text-[#636E72] font-bold block sm:inline">
-                    (버튼을 눌러 바로 모의주식 대기 및 시장 분석을 시작할 수 있습니다)
-                  </span>
-                )}
+                <span className="text-[12px] sm:text-[13px] text-[#636E72] font-bold">
+                  (강사님이 모의주식을 시작하면 화면이 자동으로 전환됩니다)
+                </span>
               </div>
             </div>
           )}
@@ -728,22 +709,7 @@ export const StudentBudget: React.FC<StudentBudgetProps> = ({
                 </span>
               </PixelButton>
 
-              {saveSuccess && (
-                <PixelButton
-                  variant="primary"
-                  size="lg"
-                  onClick={() => {
-                    playSelectSound();
-                    if (onGoToStock) onGoToStock();
-                    else onBudgetSaved();
-                  }}
-                >
-                  <span className="flex items-center gap-1.5 font-black">
-                    <span>모의주식 입장</span>
-                    <ArrowRight size={16} />
-                  </span>
-                </PixelButton>
-              )}
+
             </div>
           </div>
         </PixelCard>

@@ -158,6 +158,43 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
     }
   };
 
+  // Action: Send Initial 6 News for Round 0
+  const handleSendInitialNews = async () => {
+    if (!session?.sessionId) return;
+    setLoading(true);
+    try {
+      playSuccessSound();
+      const initialNewsIds = INITIAL_NEWS_POOL.slice(0, 6).map(n => n.id);
+      
+      const response = await fetch('/api/teacher/stock/send-news', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-teacher-token': token,
+        },
+        body: JSON.stringify({
+          sessionId: session.sessionId,
+          revealedNewsIds: initialNewsIds,
+          slots: [],
+        }),
+      });
+
+      const result = await response.json();
+      if (result.ok) {
+        setStatusMessage('초기 6대 기사가 학생들에게 전송되었습니다!');
+        onRefreshSession();
+        fetchStockData();
+      } else {
+        setStatusMessage(result.message || '전송 실패');
+      }
+    } catch (e: any) {
+      console.error(e);
+      setStatusMessage(`오류 발생: ${e.message || '통신 오류'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Action: Send the 3 selected news items to students
   const handleSendNewsToStudents = async () => {
     if (!session?.sessionId) return;
@@ -424,8 +461,27 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
 
         {/* Action Controls for Round 0 vs Rounds 1~5 */}
         {currentRound === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-5">
-            {/* Step 1: Open Initial Trading */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-5">
+            {/* Step 1: Send Initial News */}
+            <div className="space-y-2">
+              <PixelButton
+                variant="primary"
+                size="lg"
+                className="w-full animate-bounce"
+                disabled={currentState !== 'waiting' || loading}
+                onClick={handleSendInitialNews}
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <Send size={18} />
+                  <span>1. 초기 기사 6건 전송</span>
+                </span>
+              </PixelButton>
+              <p className="text-[11px] text-[#636E72] font-bold text-center">
+                학생들에게 모의주식 시작 전 6대 핵심 경제 기사를 전송합니다.
+              </p>
+            </div>
+
+            {/* Step 2: Open Initial Trading */}
             <div className="space-y-2">
               <PixelButton
                 variant="gold"
@@ -436,7 +492,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
               >
                 <span className="flex items-center justify-center gap-2">
                   <Play size={18} />
-                  <span>1. 초기 상장 시작 (학생 첫 포트폴리오 매수)</span>
+                  <span>2. 상장 시작 (학생 매수)</span>
                 </span>
               </PixelButton>
               <p className="text-[11px] text-[#636E72] font-bold text-center">
@@ -455,7 +511,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
               >
                 <span className="flex items-center justify-center gap-2">
                   <CheckCircle size={18} />
-                  <span>2. 초기 상장 마감 ➔ 1라운드 시작</span>
+                  <span>3. 초기 상장 마감 ➔ 1라운드 시작</span>
                 </span>
               </PixelButton>
               <p className="text-[11px] text-[#636E72] font-bold text-center">

@@ -157,7 +157,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
             }
 
             if (
-              curRound >= 1 &&
+              curRound >= 0 &&
               (curState === 'news' || curState === 'trading') &&
               newsList.length > 0 &&
               lastAutoOpenedRoundRef.current !== curRound
@@ -269,20 +269,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Initial Market Overview News Button */}
-            <PixelButton
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                playSelectSound();
-                setShowInitialNewsModal(true);
-              }}
-            >
-              <span className="flex items-center gap-1.5 text-xs font-bold">
-                <Newspaper size={14} />
-                <span>🌐 초기 6대 기사</span>
-              </span>
-            </PixelButton>
+
 
             {/* Breaking News Popup Button for Current Round */}
             {revealedNews.length > 0 && (
@@ -418,16 +405,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                 {(myAsset?.totalStockValuation ?? 0).toLocaleString()}원
               </span>
             </div>
-            <div className="flex justify-between items-center text-xs pt-1 border-t-2 border-black">
-              <span className="text-[#636E72] font-bold">이번 라운드 매매:</span>
-              <span
-                className={`font-black ${
-                  hasTradedThisRound ? 'text-[#00B894]' : 'text-[#D63031]'
-                }`}
-              >
-                {hasTradedThisRound ? '1회 완료 ✓' : '가능 (1회 남음)'}
-              </span>
-            </div>
+
           </div>
         </div>
       </PixelCard>
@@ -450,8 +428,8 @@ export const StudentStock: React.FC<StudentStockProps> = ({
         </div>
       )}
 
-      {/* 3. 6-Slot Mystery News Cards Grid */}
-      {currentRound >= 1 && (
+      {/* 3. 뉴스 속보 카드 */}
+      {currentRound >= 0 && (
         <PixelCard className="bg-white border-4 border-black rounded-3xl p-5 space-y-3 shadow-[6px_6px_0px_0px_#000] text-[#2D3436]">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -459,109 +437,68 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                 <Newspaper className="text-[#1A1A1A]" size={18} />
               </div>
               <h3 className="font-black text-base text-[#2D3436]">
-                R{currentRound} 뉴스 속보 카드 (6칸 중 3건 공개)
+                뉴스 속보 카드
               </h3>
             </div>
             <div className="flex items-center gap-2">
-              {revealedNews.length > 0 && (
-                <PixelButton
-                  variant="gold"
-                  size="sm"
-                  onClick={() => {
-                    playSelectSound();
-                    setShowBreakingNewsModal(true);
-                  }}
-                >
-                  <span className="text-xs font-black flex items-center gap-1">
-                    <Newspaper size={14} />
-                    <span>📰 공개 기사 팝업 보기 ({revealedNews.length}건)</span>
-                  </span>
-                </PixelButton>
-              )}
               <span className="text-xs text-[#636E72] font-bold">
-                {currentState === 'waiting'
-                  ? '강사님이 뉴스를 공개할 때까지 대기하세요'
+                {revealedNews.length === 0
+                  ? '강사님이 뉴스를 전송할 때까지 대기하세요'
                   : '카드를 클릭하면 기사 전문을 확인할 수 있습니다!'}
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {displaySlots.map((slot, idx) => {
-              const isRevealed = slot.isRevealed && slot.news;
-              const news = slot.news as NewsItem | null;
-              const isPositive = news?.impact === 'positive';
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
+            {revealedNews.length === 0 ? (
+              <div className="col-span-full py-8 text-center text-[#636E72] font-bold">
+                뉴스 대기 중입니다...
+              </div>
+            ) : (
+              revealedNews.map((news, idx) => {
+                const isPositive = news.impact === 'positive';
 
-              return (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    if (isRevealed && news) {
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => {
                       playSelectSound();
                       setSelectedNewsDetail(news);
-                    } else {
-                      playFlipSound();
-                      setUnrevealedAlert(idx + 1);
-                      setTimeout(() => setUnrevealedAlert(null), 3000);
-                    }
-                  }}
-                  className={`min-h-[140px] rounded-2xl border-2 border-black p-3 flex flex-col justify-between transition-all select-none cursor-pointer shadow-[3px_3px_0px_0px_#000] active:scale-95 ${
-                    isRevealed
-                      ? isPositive
+                    }}
+                    className={`min-h-[140px] rounded-2xl border-2 border-black p-3 flex flex-col justify-between transition-all select-none cursor-pointer shadow-[3px_3px_0px_0px_#000] active:scale-95 ${
+                      isPositive
                         ? 'bg-[#FFF0F0] hover:bg-[#FFE3E3] hover:scale-105'
                         : 'bg-[#EBF7FF] hover:bg-[#DDF0FF] hover:scale-105'
-                      : 'bg-[#FFFBEB] hover:bg-[#FFF4C2] border-dashed text-[#636E72]'
-                  }`}
-                >
-                  {isRevealed && news ? (
-                    <>
-                      <div>
-                        <div className="flex items-center justify-between gap-1 mb-1">
-                          <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-white/90 border border-black truncate">
-                            {news.targetCompany}
-                          </span>
-                          <span
-                            className={`text-xs font-black font-mono ${
-                              isPositive ? 'text-[#D63031]' : 'text-[#0984E3]'
-                            }`}
-                          >
-                            {isPositive ? '▲ +' : '▼ '}{Math.abs(news.impactRate)}%
-                          </span>
-                        </div>
-
-                        <p className="text-xs font-black text-[#2D3436] leading-snug line-clamp-3 my-1">
-                          {news.title}
-                        </p>
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-white/90 border border-black truncate">
+                          {news.targetCompany}
+                        </span>
+                        <span
+                          className={`text-xs font-black font-mono ${
+                            isPositive ? 'text-[#D63031]' : 'text-[#0984E3]'
+                          }`}
+                        >
+                          {isPositive ? '▲ +' : '▼ '}{Math.abs(news.impactRate)}%
+                        </span>
                       </div>
 
-                      <div className="pt-2 border-t border-black/10 text-[10px] text-[#D63031] font-mono font-black text-right flex items-center justify-between">
-                        <span className="text-[#636E72]">카드 #{idx + 1}</span>
-                        <span className="flex items-center gap-0.5">상세보기 ➔</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-[#636E72] space-y-1.5 py-4 text-center">
-                      <div className="w-9 h-9 rounded-xl bg-[#FFD32D] border-2 border-black flex items-center justify-center shadow-[2px_2px_0px_0px_#000] animate-bounce">
-                        <Newspaper size={18} className="text-[#1A1A1A]" />
-                      </div>
-                      <span className="text-[11px] font-mono font-black text-[#2D3436]">
-                        뉴스 카드 #{idx + 1}
-                      </span>
-                      <span className="text-[9px] text-[#A4B0BE] font-bold">
-                        {currentState === 'waiting' ? '뉴스 대기중' : '미공개 카드'}
-                      </span>
+                      <p className="text-xs font-black text-[#2D3436] leading-snug line-clamp-3 my-1">
+                        {news.title}
+                      </p>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
 
-          {unrevealedAlert && (
-            <div className="p-3 rounded-2xl bg-[#FFFBEB] border-2 border-black text-xs font-black text-center text-[#2D3436] shadow-[2px_2px_0px_0px_#000] animate-in fade-in">
-              ℹ️ <strong>카드 #{unrevealedAlert}</strong>: {currentState === 'waiting' ? '강사님이 기사를 선택해 전송할 때까지 잠시만 기다려주세요!' : '이번 라운드에 공개되지 않은 카드입니다. 공개된 3개의 기사를 확인하세요!'}
-            </div>
-          )}
+                    <div className="pt-2 border-t border-black/10 text-[10px] text-[#D63031] font-mono font-black text-right flex items-center justify-between">
+                      <span className="text-[#636E72]">기사 #{idx + 1}</span>
+                      <span className="flex items-center gap-0.5">상세보기 ➔</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </PixelCard>
       )}
 
@@ -743,7 +680,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                         size="sm"
                         disabled={
                           !isTradingOpen ||
-                          hasTradedThisRound ||
                           (myAsset?.cash ?? student.cash ?? 1000000) < c.currentPrice * tradeQuantity ||
                           trading
                         }
@@ -757,7 +693,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                         size="sm"
                         disabled={
                           !isTradingOpen ||
-                          hasTradedThisRound ||
                           holding.quantity < tradeQuantity ||
                           trading
                         }
@@ -766,12 +701,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                         매도 (팔기)
                       </PixelButton>
                     </div>
-
-                    {hasTradedThisRound && (
-                      <p className="text-[10px] text-[#D63031] text-center font-black">
-                        ⚠️ 이번 라운드 거래가 완료되었습니다. 다음 라운드에 다시 거래할 수 있습니다.
-                      </p>
-                    )}
                   </div>
                 ) : (
                   <button

@@ -298,7 +298,23 @@ export const syncManager = {
       if (res.ok) {
         const data = await res.json();
         if (data && data.ok && Array.isArray(data.students)) {
-          return data.students.map(syncManager.normalizeStudent);
+          const mapped = data.students.map(syncManager.normalizeStudent);
+          
+          // Merge with local students (in case Express memory was reset)
+          const local = syncManager.getLocalStudents(cleanSession);
+          const combined = [...mapped];
+          local.forEach((loc) => {
+            if (!combined.some((c) => c.studentId === loc.studentId)) {
+              combined.push(loc);
+            }
+          });
+          
+          // Cache the combined list
+          try {
+            localStorage.setItem(`fc_students_${cleanSession}`, JSON.stringify(combined));
+          } catch {}
+          
+          return combined;
         }
       }
     } catch {}

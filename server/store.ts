@@ -64,7 +64,7 @@ export class AppStore {
       sessionId: code,
       createdAt: Date.now(),
       currentModule: 'lobby',
-      stockRound: 1,
+      stockRound: 0,
       stockState: 'waiting',
       currentQuizIndex: 0,
       revealedNewsIds: [],
@@ -460,10 +460,6 @@ export class AppStore {
     let student = this.getStudent(sessionId, studentId);
     if (!student) {
       student = this.addStudent(sessionId, studentId, `학생_${studentId.substring(0, 4)}`);
-    }
-
-    if (student.lastTradeRound === session.stockRound) {
-      return { ok: false, message: '이번 라운드에는 이미 매매를 완료했습니다.' };
     }
 
     if (quantity <= 0 || !Number.isInteger(quantity)) {
