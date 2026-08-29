@@ -135,19 +135,13 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
     setLoading(true);
     try {
       playFlipSound();
-      const result = await syncManager.flipStockNewsSlot(session.sessionId, session, slotIndex, token, 3);
+      const result = await syncManager.flipStockNewsSlot(session.sessionId, session, slotIndex, token, 6);
       if (result.ok) {
         setStatusMessage(result.message);
         setSlots(result.slots);
         setRevealedNews(result.revealedNews);
         onRefreshSession();
         fetchStockData();
-
-        // If 3 cards are flipped, trigger sound and open send modal!
-        if (result.revealedCount === 3) {
-          playSuccessSound();
-          setShowSendNewsModal(true);
-        }
       } else {
         setStatusMessage(result.message);
       }
@@ -200,8 +194,8 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
   const handleSendNewsToStudents = async () => {
     if (!session?.sessionId) return;
     const chosenNews = slots.filter((s) => s.isRevealed && s.news).map((s) => s.news);
-    if (chosenNews.length !== 3) {
-      setStatusMessage('신문 기사 3개를 모두 선택한 후 학생들에게 전송할 수 있습니다.');
+    if (chosenNews.length === 0) {
+      setStatusMessage('신문 기사를 하나 이상 선택한 후 학생들에게 전송할 수 있습니다.');
       return;
     }
 
@@ -224,7 +218,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
     }
   };
 
-  // Action: Reset slots to choose 3 cards again
+  // Action: Reset slots to choose cards again
   const handleResetSlots = async () => {
     if (!session?.sessionId) return;
     setLoading(true);
@@ -234,7 +228,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
       if (result?.slots) {
         setSlots(result.slots);
         setRevealedNews([]);
-        setStatusMessage('슬롯이 초기화되었습니다. 학생들과 함께 3개의 카드를 다시 클릭해 선택해주세요!');
+        setStatusMessage('슬롯이 초기화되었습니다. 카드를 클릭해 선택해주세요!');
         onRefreshSession();
         fetchStockData();
       }
@@ -524,17 +518,17 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-5">
             {/* Step 1: Reveal / Send News */}
             <div className="space-y-2">
-              {revealedSlotCount === 3 && currentState === 'waiting' ? (
+              {revealedSlotCount > 0 && currentState === 'waiting' ? (
                 <PixelButton
                   variant="primary"
                   size="lg"
                   className="w-full animate-bounce"
                   disabled={loading}
-                  onClick={() => setShowSendNewsModal(true)}
+                  onClick={handleSendNewsToStudents}
                 >
                   <span className="flex items-center justify-center gap-2">
                     <Send size={18} />
-                    <span>1. 📢 3개 기사 학생들에게 전송하기!</span>
+                    <span>1. 📢 선택한 기사 학생들에게 전송하기!</span>
                   </span>
                 </PixelButton>
               ) : (

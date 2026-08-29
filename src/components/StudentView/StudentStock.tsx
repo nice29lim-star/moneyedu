@@ -107,7 +107,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
           lastAutoOpenedRoundRef.current !== curRound
         ) {
           lastAutoOpenedRoundRef.current = curRound;
-          setShowBreakingNewsModal(true);
+          
           playFlipSound();
         }
       } else {
@@ -164,7 +164,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
               lastAutoOpenedRoundRef.current !== curRound
             ) {
               lastAutoOpenedRoundRef.current = curRound;
-              setShowBreakingNewsModal(true);
+              
               playFlipSound();
             }
           }
@@ -272,22 +272,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
           <div className="flex items-center gap-2 flex-wrap">
 
 
-            {/* Breaking News Popup Button for Current Round */}
-            {revealedNews.length > 0 && (
-              <PixelButton
-                variant="gold"
-                size="sm"
-                onClick={() => {
-                  playSelectSound();
-                  setShowBreakingNewsModal(true);
-                }}
-              >
-                <span className="flex items-center gap-1.5 text-xs font-black animate-pulse">
-                  <Newspaper size={14} />
-                  <span>📰 이번 라운드 뉴스 ({revealedNews.filter(n => n.roundAppeared === currentRound).length}건)</span>
-                </span>
-              </PixelButton>
-            )}
+            
 
             {/* View Investment Report Button */}
             <PixelButton
@@ -758,186 +743,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
           })}
         </div>
       </div>
-
-      {/* Modal 1: Breaking News Popup Modal (3 Articles) */}
-      {showBreakingNewsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-200">
-          <PixelCard className="bg-white border-4 border-black p-5 sm:p-7 max-w-4xl w-full space-y-5 rounded-3xl shadow-[12px_12px_0px_0px_#000] text-[#2D3436] my-8 max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-4 border-b-2 border-black">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-[#FFD32D] border-2 border-black rounded-2xl shadow-[2px_2px_0px_0px_#000]">
-                  <Newspaper className="text-[#1A1A1A]" size={24} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-black px-2 py-0.5 rounded bg-[#D63031] text-white">
-                      긴급 속보
-                    </span>
-                    <span className="text-xs font-mono font-black text-[#636E72]">
-                      ROUND {currentRound}
-                    </span>
-                  </div>
-                  <h3 className="text-xl font-black text-[#2D3436] mt-0.5">
-                    📰 제 {currentRound}라운드 경제 속보 ({revealedNews.length}건)
-                  </h3>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  playSelectSound();
-                  setShowBreakingNewsModal(false);
-                }}
-                className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F8F9FA] hover:bg-[#FFE3E3] border-2 border-black font-black text-base shadow-[2px_2px_0px_0px_#000] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none transition-all"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* News Cards Grid (3 Articles) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {revealedNews.map((news, idx) => {
-                const isPositive = news.impact === 'positive';
-                return (
-                  <div
-                    key={idx}
-                    className={`rounded-2xl border-2 border-black p-4 flex flex-col justify-between space-y-3 shadow-[4px_4px_0px_0px_#000] ${
-                      isPositive ? 'bg-[#FFF0F0]' : 'bg-[#EBF7FF]'
-                    }`}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-mono font-black px-2.5 py-1 rounded-lg bg-white border-2 border-black shadow-[1px_1px_0px_0px_#000]">
-                          🏢 {news.targetCompany}
-                        </span>
-                        <span
-                          className={`text-sm font-mono font-black px-2 py-0.5 rounded-lg bg-white border-2 border-black shadow-[1px_1px_0px_0px_#000] ${
-                            isPositive ? 'text-[#D63031]' : 'text-[#0984E3]'
-                          }`}
-                        >
-                          {isPositive ? '▲ 호재 +' : '▼ 악재 '}{Math.abs(news.impactRate)}%
-                        </span>
-                      </div>
-
-                      <h4 className="text-sm font-black text-[#2D3436] leading-snug">
-                        {news.title}
-                      </h4>
-
-                      <p className="text-xs font-bold text-[#2D3436] leading-relaxed bg-white/90 p-3 rounded-xl border border-black/20">
-                        {news.content}
-                      </p>
-                    </div>
-
-                    <div className="pt-2 border-t border-black/10 flex items-center justify-between text-[11px] font-bold text-[#636E72]">
-                      <span>💡 관련 기업: <strong>{news.targetCompany}</strong></span>
-                      <span className="font-mono font-black text-[#D63031]">기사 #{idx + 1}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Investment Guide Tip */}
-            <div className="p-3.5 bg-[#FFFBEB] border-2 border-black rounded-2xl text-xs text-[#2D3436] space-y-1">
-              <div className="font-black flex items-center gap-1.5 text-[#D63031]">
-                <span>📈 투자 전략 팁:</span>
-              </div>
-              <p className="font-bold leading-relaxed">
-                호재 기사(▲)는 다음 라운드 주가 상승에 긍정적인 영향을 주고, 악재 기사(▼)는 주가 하락 요인이 됩니다. 이번 라운드에 현명하게 매수/매도해보세요!
-              </p>
-            </div>
-
-            {/* Close Button */}
-            <div className="space-y-2 pt-2">
-              <PixelButton
-                variant="gold"
-                size="lg"
-                className="w-full shadow-[4px_4px_0px_0px_#000]"
-                onClick={() => {
-                  playSelectSound();
-                  setShowBreakingNewsModal(false);
-                }}
-              >
-                <span className="flex items-center justify-center gap-2 text-sm font-black">
-                  <span>✕ 기사 닫고 주식 매수/매도하기</span>
-                </span>
-              </PixelButton>
-
-              <p className="text-[11px] text-[#636E72] font-bold text-center">
-                💡 창을 닫은 후에도 상단의 <strong>[📰 이번 라운드 뉴스 보기]</strong> 버튼을 누르면 언제든지 다시 열어볼 수 있습니다.
-              </p>
-            </div>
-          </PixelCard>
-        </div>
-      )}
-
-      {/* Modal 2: Initial 6 Overview Market News Modal */}
-      {showInitialNewsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto animate-in fade-in duration-200">
-          <PixelCard className="bg-[#F4F1EA] border-4 border-black p-5 sm:p-7 max-w-3xl w-full space-y-5 rounded-xl shadow-[12px_12px_0px_0px_#000] text-[#2D3436] my-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b-4 border-black">
-              <div className="flex flex-col">
-                <h3 className="text-2xl font-black text-[#2D3436] tracking-tighter" style={{ fontFamily: 'serif' }}>
-                  THE MONEY EDU TIMES
-                </h3>
-                <span className="text-xs font-bold text-[#636E72] mt-1">초기 시장 브리핑 (R0)</span>
-              </div>
-              <button
-                onClick={() => setShowInitialNewsModal(false)}
-                className="p-1 rounded-lg hover:bg-black/5 border-2 border-transparent hover:border-black transition-all"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {initialOverviewNews.map((n) => {
-                const isPos = n.impact === 'positive';
-                return (
-                  <div
-                    key={n.id}
-                    className="p-4 rounded-xl bg-white border border-[#D1CCC0] flex flex-col justify-between shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 transition-all cursor-pointer"
-                    onClick={() => {
-                      playSelectSound();
-                      setSelectedNewsDetail(n);
-                    }}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-[11px] font-black mb-2 border-b border-dashed border-[#D1CCC0] pb-2">
-                        <span className="text-[#2D3436] font-mono font-bold">
-                          {n.targetCompany}
-                        </span>
-                        <span className={isPos ? 'text-[#D63031]' : 'text-[#0984E3]'}>
-                          {isPos ? '▲ 호재' : '▼ 악재'} ({n.impactRate}%)
-                        </span>
-                      </div>
-                      <h4 className="font-black text-xs text-[#2D3436] mt-1 mb-1 leading-snug">
-                        {n.title}
-                      </h4>
-                      <p className="text-[11px] text-[#636E72] line-clamp-3 leading-relaxed font-medium">
-                        {n.content}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="pt-2">
-              <PixelButton
-                variant="primary"
-                size="md"
-                className="w-full"
-                onClick={() => setShowInitialNewsModal(false)}
-              >
-                확인 완료 (창 닫기)
-              </PixelButton>
-            </div>
-          </PixelCard>
-        </div>
-      )}
 
       {/* Modal 3: Round End Results & Performance Popup */}
       {showRoundResultModal && roundResultData && (
