@@ -58,7 +58,7 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
   }, [session?.sessionId, student.studentId]);
 
   const generateFallbackReport = (): FinalReport => {
-    const initSeed = student?.initialInvestment || 1000000;
+    const initSeed = student?.initialInvestment ?? 0;
     const finalAsset = student?.cash || initSeed;
     const diff = finalAsset - initSeed;
     const profitRate = initSeed > 0 ? (diff / initSeed) * 100 : 0;

@@ -471,7 +471,7 @@ export const syncManager = {
             const mappedSession: Session = {
               sessionId: cleanSession,
               currentModule: gasSess['현재모듈'] || gasSess.currentModule || 'lobby',
-              stockRound: Number(gasSess['주식_현재라운드'] || gasSess.stockRound || 1),
+              stockRound: Number(gasSess['주식_현재라운드'] ?? gasSess.stockRound ?? 0),
               stockState: gasSess['주식_상태'] || gasSess.stockState || 'waiting',
               currentQuizIndex: Number(gasSess['현재퀴즈번호'] || gasSess.currentQuizIndex || 0),
               isCompleted: gasSess['현재모듈'] === 'report' || gasSess.isCompleted === true,
@@ -544,7 +544,7 @@ export const syncManager = {
     let sessObj: Session = {
       sessionId: cleanSession,
       currentModule,
-      stockRound: 1,
+      stockRound: 0,
       stockState: 'waiting',
       currentQuizIndex: 0,
       isCompleted: currentModule === 'report',
@@ -618,7 +618,7 @@ export const syncManager = {
       : {
           sessionId: cleanSession,
           currentModule: 'stock',
-          stockRound: 1,
+          stockRound: 0,
           stockState: 'waiting',
           currentQuizIndex: 0,
           isCompleted: false,
@@ -648,7 +648,7 @@ export const syncManager = {
 
     // Local fallback if no slots or less than 6
     if (!slots || slots.length !== 6 || !slots[0]?.news) {
-      const currentRound = updatedSession.stockRound || 1;
+      const currentRound = updatedSession.stockRound ?? 0;
       const shuffled = [...INITIAL_NEWS_POOL].sort(() => Math.random() - 0.5);
       const candidates = shuffled.slice(0, 6).map((n) => ({ ...n, roundAppeared: currentRound }));
 
@@ -689,7 +689,7 @@ export const syncManager = {
       : {
           sessionId: cleanSession,
           currentModule: 'stock',
-          stockRound: 1,
+          stockRound: 0,
           stockState: 'waiting',
           currentQuizIndex: 0,
           isCompleted: false,
@@ -752,7 +752,7 @@ export const syncManager = {
       : {
           sessionId: cleanSession,
           currentModule: 'stock',
-          stockRound: 1,
+          stockRound: 0,
           stockState: 'waiting',
           currentQuizIndex: 0,
           isCompleted: false,
@@ -787,7 +787,7 @@ export const syncManager = {
       : {
           sessionId: cleanSession,
           currentModule: 'stock',
-          stockRound: 1,
+          stockRound: 0,
           stockState: 'waiting',
           currentQuizIndex: 0,
           isCompleted: false,
@@ -842,7 +842,7 @@ export const syncManager = {
       : {
           sessionId: cleanSession,
           currentModule: 'stock',
-          stockRound: 1,
+          stockRound: 0,
           stockState: 'waiting',
           currentQuizIndex: 0,
           isCompleted: false,
@@ -851,7 +851,7 @@ export const syncManager = {
           createdAt: Date.now(),
         };
 
-    const currentRound = updatedSession.stockRound || 1;
+    const currentRound = updatedSession.stockRound ?? 0;
     const allNews = [...INITIAL_NEWS_POOL];
     const shuffled = allNews.sort(() => Math.random() - 0.5);
     const picked = shuffled.slice(0, count).map((n) => ({ ...n, roundAppeared: currentRound }));
@@ -878,7 +878,7 @@ export const syncManager = {
       : {
           sessionId: cleanSession,
           currentModule: 'stock',
-          stockRound: 1,
+          stockRound: 0,
           stockState: 'trading',
           currentQuizIndex: 0,
           isCompleted: false,
@@ -931,7 +931,7 @@ export const syncManager = {
       : {
           sessionId: cleanSession,
           currentModule: 'stock',
-          stockRound: 1,
+          stockRound: 0,
           stockState: 'trading',
           currentQuizIndex: 0,
           isCompleted: false,
@@ -1083,8 +1083,8 @@ export const syncManager = {
       studentNum: '01',
       loginTime: Date.now(),
       quizBonus: 0,
-      cash: 1000000,
-      initialInvestment: 1000000,
+      cash: 0,
+      initialInvestment: 0,
     };
 
     const companies = syncManager.getCompanies(cleanSession);
@@ -1105,6 +1105,8 @@ export const syncManager = {
         changeRate: 0,
         priceHistory: [50000],
         icon: '🏢',
+        description: '',
+        color: '#000000',
       };
     }
 
@@ -1163,7 +1165,7 @@ export const syncManager = {
       }
     }
 
-    const initialInvestment = asset.initialInvestment || studentObj.initialInvestment || studentObj.cash || 1000000;
+    const initialInvestment = asset.initialInvestment ?? studentObj.initialInvestment ?? studentObj.cash ?? 0;
     const totalAsset = newCash + totalStockValuation;
     const profitAmount = totalAsset - initialInvestment;
     const profitRate = initialInvestment > 0 ? parseFloat(((profitAmount / initialInvestment) * 100).toFixed(2)) : 0;
@@ -1257,7 +1259,7 @@ export const syncManager = {
       if (localStr) return JSON.parse(localStr);
     } catch {}
 
-    const startCash = fallbackStudent?.cash || 1000000;
+    const startCash = fallbackStudent?.cash ?? 0;
     return {
       studentId,
       studentName: fallbackStudent?.name || '학생',

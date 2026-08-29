@@ -48,11 +48,11 @@ export const StudentStock: React.FC<StudentStockProps> = ({
   const [myAsset, setMyAsset] = useState<StudentAsset | null>(() => ({
     studentId: student?.studentId || '',
     studentName: student?.name || '',
-    cash: student?.cash || 1000000,
-    initialInvestment: student?.initialInvestment || student?.cash || 1000000,
+    cash: student?.cash ?? 0,
+    initialInvestment: student?.initialInvestment ?? student?.cash ?? 0,
     holdings: {},
     totalStockValuation: 0,
-    totalAsset: student?.cash || 1000000,
+    totalAsset: student?.cash ?? 0,
     profitAmount: 0,
     profitRate: 0,
     tradedThisRound: false,
@@ -284,7 +284,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
               >
                 <span className="flex items-center gap-1.5 text-xs font-black animate-pulse">
                   <Newspaper size={14} />
-                  <span>📰 이번 라운드 뉴스 ({revealedNews.filter(n => n.targetRound === currentRound).length}건)</span>
+                  <span>📰 이번 라운드 뉴스 ({revealedNews.filter(n => n.roundAppeared === currentRound).length}건)</span>
                 </span>
               </PixelButton>
             )}
@@ -377,13 +377,13 @@ export const StudentStock: React.FC<StudentStockProps> = ({
               </span>
             </div>
             <div className="text-3xl sm:text-4xl font-black font-mono text-[#2D3436] tracking-tight">
-              {(myAsset?.totalAsset || student.cash || 1000000).toLocaleString()}
+              {(myAsset?.totalAsset ?? student.cash ?? 0).toLocaleString()}
               <span className="text-xl text-[#D63031] ml-1">원</span>
             </div>
             <div className="flex items-center gap-2 pt-1">
               <span className="text-xs text-[#636E72] font-bold">초기 투자원금:</span>
               <span className="text-xs font-mono font-black text-[#2D3436]">
-                {(myAsset?.initialInvestment || student.initialInvestment || 1000000).toLocaleString()}원
+                {(myAsset?.initialInvestment ?? student.initialInvestment ?? 0).toLocaleString()}원
               </span>
             </div>
           </div>
@@ -413,7 +413,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
             <div className="flex justify-between items-center text-xs">
               <span className="text-[#636E72] font-bold">보유 현금:</span>
               <span className="font-mono font-black text-[#D63031]">
-                {(myAsset?.cash ?? student.cash ?? 1000000).toLocaleString()}원
+                {(myAsset?.cash ?? student.cash ?? 0).toLocaleString()}원
               </span>
             </div>
             <div className="flex justify-between items-center text-xs">
@@ -467,13 +467,13 @@ export const StudentStock: React.FC<StudentStockProps> = ({
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
-            {revealedNews.filter(n => n.targetRound === currentRound).length === 0 ? (
+            {revealedNews.filter(n => n.roundAppeared === currentRound).length === 0 ? (
               <div className="col-span-full py-8 text-center text-[#636E72] font-bold border-2 border-dashed border-[#DFE6E9] rounded-2xl">
                 뉴스 대기 중입니다...
               </div>
             ) : (
               revealedNews
-                .filter(n => n.targetRound === currentRound)
+                .filter(n => n.roundAppeared === currentRound)
                 .map((news, idx) => {
                   const isPositive = news.impact === 'positive';
 
@@ -520,7 +520,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
           </div>
 
           {/* Past Round News */}
-          {revealedNews.filter(n => n.targetRound < currentRound).length > 0 && (
+          {revealedNews.filter(n => n.roundAppeared < currentRound).length > 0 && (
             <div className="mt-4 pt-4 border-t-2 border-dashed border-[#DFE6E9]">
               <h4 className="text-xs font-bold text-[#636E72] mb-2 flex items-center gap-1">
                 <RefreshCw size={12} />
@@ -528,8 +528,8 @@ export const StudentStock: React.FC<StudentStockProps> = ({
               </h4>
               <div className="flex flex-col gap-2">
                 {revealedNews
-                  .filter(n => n.targetRound < currentRound)
-                  .sort((a, b) => b.targetRound - a.targetRound)
+                  .filter(n => n.roundAppeared < currentRound)
+                  .sort((a, b) => b.roundAppeared - a.roundAppeared)
                   .map((news, idx) => (
                     <div
                       key={`past-${idx}`}
@@ -541,7 +541,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                     >
                       <div className="flex items-center gap-2 mb-2 sm:mb-0">
                         <span className="text-[10px] font-mono font-black bg-white px-1.5 py-0.5 rounded border border-[#B2BEC3] text-[#636E72]">
-                          R{news.targetRound}
+                          R{news.roundAppeared}
                         </span>
                         <span className="text-[11px] font-bold text-[#2D3436] truncate max-w-[200px]">
                           {news.title}
@@ -718,7 +718,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                         size="sm"
                         disabled={
                           !isTradingOpen ||
-                          (myAsset?.cash ?? student.cash ?? 1000000) < c.currentPrice * tradeQuantity ||
+                          (myAsset?.cash ?? student.cash ?? 0) < c.currentPrice * tradeQuantity ||
                           trading
                         }
                         onClick={() => handleTrade(c, 'BUY', tradeQuantity)}
@@ -1017,7 +1017,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
             <div className="flex items-center justify-between pb-4 border-b-4 border-black">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-mono font-black text-[#636E72] bg-white px-2 py-1 rounded border-2 border-black">
-                  {selectedNewsDetail.targetRound === 0 ? '초기 속보' : `${selectedNewsDetail.targetRound}라운드 속보`}
+                  {selectedNewsDetail.roundAppeared === 0 ? '초기 속보' : `${selectedNewsDetail.roundAppeared}라운드 속보`}
                 </span>
               </div>
               <div className="text-right flex flex-col">

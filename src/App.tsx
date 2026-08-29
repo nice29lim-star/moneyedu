@@ -243,7 +243,7 @@ export default function App() {
       const newSess: Session = {
         sessionId: generatedCode,
         currentModule: 'lobby',
-        stockRound: 1,
+        stockRound: 0,
         stockState: 'waiting',
         currentQuizIndex: 0,
         isCompleted: false,
@@ -276,7 +276,7 @@ export default function App() {
     const activeSession: Session = freshSession || {
       sessionId: cleanSession,
       currentModule: 'lobby',
-      stockRound: 1,
+      stockRound: 0,
       stockState: 'waiting',
       currentQuizIndex: 0,
       isCompleted: false,
@@ -457,7 +457,7 @@ export default function App() {
               const newSess: Session = {
                 sessionId: newCode,
                 currentModule: 'lobby',
-                stockRound: 1,
+                stockRound: 0,
                 stockState: 'waiting',
                 currentQuizIndex: 0,
                 isCompleted: false,

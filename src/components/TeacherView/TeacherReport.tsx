@@ -57,7 +57,7 @@ export const TeacherReport: React.FC<TeacherReportProps> = ({
         const students = await syncManager.fetchStudents(session.sessionId, token);
         if (Array.isArray(students) && students.length > 0) {
           const calculated: FinalReport[] = students.map((st, idx) => {
-            const seed = st.initialInvestment || 1000000;
+            const seed = st.initialInvestment ?? 0;
             const finalAsset = st.totalAsset || st.cash || seed;
             const diff = finalAsset - seed;
             const profitRate = seed > 0 ? (diff / seed) * 100 : 0;
