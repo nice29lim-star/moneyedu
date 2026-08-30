@@ -997,8 +997,6 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
         </div>
       )}
 
-      {/* Modal 3: Single News Detail View Modal */}
-      {selectedNewsDetail && (
       {/* Newspaper Modal */}
       {selectedNewsDetail && (
         <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">

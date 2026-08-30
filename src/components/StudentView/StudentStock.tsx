@@ -424,7 +424,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
             </div>
 
           </div>
-          </div>
         </div>
         
         {/* Holdings Summary */}
