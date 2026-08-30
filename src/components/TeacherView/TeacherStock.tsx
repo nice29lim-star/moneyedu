@@ -54,6 +54,9 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
   const [showInitialNewsModal, setShowInitialNewsModal] = useState(false);
   const [showSendNewsModal, setShowSendNewsModal] = useState(false);
 
+  // Added for R0 flow
+  const [isR0NewsIssued, setIsR0NewsIssued] = useState(false);
+
   const currentRound = session?.stockRound ?? 0;
   const currentState = session?.stockState || 'waiting';
 
@@ -123,12 +126,19 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
   // Handle Slot Flip (Pick up to 3 cards)
   const handleSlotFlip = async (slotIndex: number) => {
     if (!session?.sessionId) return;
+    const slot = slots.find((s) => s.slotIndex === slotIndex || s.slotIndex === undefined && slots.indexOf(s) === slotIndex);
+    
+    // If already revealed, show the newspaper popup
+    if (slot?.isRevealed && slot?.news) {
+      playSelectSound();
+      setSelectedNewsDetail(slot.news);
+      return;
+    }
+
+    // In R0, we can't flip new cards (they are all revealed at once)
+    if (currentRound === 0) return;
+
     if (currentState === 'trading' || currentState === 'closed') {
-      const slot = slots.find((s) => s.slotIndex === slotIndex);
-      if (slot?.news) {
-        playSelectSound();
-        setSelectedNewsDetail(slot.news);
-      }
       return;
     }
 
@@ -151,6 +161,19 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Action: R0 Issue News (Only reveal on Teacher Screen)
+  const handleIssueR0News = () => {
+    playSuccessSound();
+    setIsR0NewsIssued(true);
+    const initialNews = INITIAL_NEWS_POOL.slice(0, 6).map(n => ({ ...n, roundAppeared: 0 }));
+    const initialSlots = initialNews.map((news, idx) => ({
+      slotIndex: idx,
+      news,
+      isRevealed: true,
+    }));
+    setSlots(initialSlots);
   };
 
   // Action: Send Initial 6 News for Round 0
@@ -376,7 +399,9 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
             <div className="text-[11px] font-mono font-black">R0 (초기 상장)</div>
             <div className="text-xs font-black mt-0.5">
               {currentRound === 0 ? (
-                <span className="text-[#D63031] font-bold">진행 중</span>
+                <span className="text-[#D63031] font-bold">
+                  {!isR0NewsIssued && currentState === 'waiting' ? '예정' : '진행 중'}
+                </span>
               ) : (
                 <span className="text-[#00B894] font-bold">완료 ✓</span>
               )}
@@ -450,20 +475,37 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-5">
             {/* Step 1: Send Initial News */}
             <div className="space-y-2">
-              <PixelButton
-                variant="primary"
-                size="lg"
-                className="w-full animate-bounce"
-                disabled={currentState !== 'waiting' || loading}
-                onClick={handleSendInitialNews}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <Send size={18} />
-                  <span>1. 초기 기사 6건 전송</span>
-                </span>
-              </PixelButton>
+              {!isR0NewsIssued ? (
+                <PixelButton
+                  variant="primary"
+                  size="lg"
+                  className="w-full animate-bounce"
+                  disabled={currentState !== 'waiting' || loading}
+                  onClick={handleIssueR0News}
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <Newspaper size={18} />
+                    <span>1. 초기 기사 6건 발행 (같이 읽기)</span>
+                  </span>
+                </PixelButton>
+              ) : (
+                <PixelButton
+                  variant="primary"
+                  size="lg"
+                  className="w-full animate-bounce"
+                  disabled={currentState !== 'waiting' || loading}
+                  onClick={handleSendInitialNews}
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <Send size={18} />
+                    <span>📢 초기 기사 학생들에게 전송하기!</span>
+                  </span>
+                </PixelButton>
+              )}
               <p className="text-[11px] text-[#636E72] font-bold text-center">
-                학생들에게 모의주식 시작 전 6대 핵심 경제 기사를 전송합니다.
+                {!isR0NewsIssued 
+                  ? '기사를 띄워 학생들과 같이 읽은 뒤 전송하세요.' 
+                  : '기사를 학생들에게 전송하고 매수를 오픈합니다.'}
               </p>
             </div>
 
@@ -588,8 +630,8 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
         )}
       </PixelCard>
 
-      {/* 6-Slot News Interactive Selection Grid (For Round 1~5) */}
-      {currentRound >= 1 && (
+      {/* 6-Slot News Interactive Selection Grid (For Round 1~5 & R0 Issued) */}
+      {(currentRound >= 1 || (currentRound === 0 && isR0NewsIssued)) && (
         <PixelCard className="bg-white border-4 border-black rounded-3xl p-5 shadow-[6px_6px_0px_0px_#000] text-[#2D3436]">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-4 border-b-2 border-black">
             <div className="flex items-center gap-2">
@@ -598,13 +640,17 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
               </div>
               <div>
                 <h3 className="font-black text-lg text-[#2D3436] flex items-center gap-2">
-                  <span>제 {currentRound}라운드 6칸 신문 기사 카드</span>
-                  <span className="text-xs font-mono font-black px-2 py-0.5 rounded-lg bg-[#FFD32D] border border-black">
-                    선택 현황: {revealedSlotCount} / 3개
-                  </span>
+                  <span>{currentRound === 0 ? '초기 시장 브리핑 6대 기사' : `제 ${currentRound}라운드 6칸 신문 기사 카드`}</span>
+                  {currentRound >= 1 && (
+                    <span className="text-xs font-mono font-black px-2 py-0.5 rounded-lg bg-[#FFD32D] border border-black">
+                      선택 현황: {revealedSlotCount} / 3개
+                    </span>
+                  )}
                 </h3>
                 <p className="text-xs text-[#636E72] font-bold">
-                  {currentState === 'waiting'
+                  {currentRound === 0 
+                    ? '카드를 클릭하면 큰 팝업으로 학생들과 같이 기사를 읽을 수 있습니다.'
+                    : currentState === 'waiting'
                     ? '👇 카드를 3개 클릭하여 뒤집은 후, [학생들에게 전송하기] 버튼을 누르세요!'
                     : '✅ 이번 라운드에 공개된 3개의 기사입니다. 카드를 클릭하면 전문을 볼 수 있습니다.'}
                 </p>
@@ -953,42 +999,37 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
 
       {/* Modal 3: Single News Detail View Modal */}
       {selectedNewsDetail && (
-        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#F4F1EA] border-4 border-black rounded-xl max-w-2xl w-full p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] space-y-6 animate-in zoom-in-95 cursor-pointer" onClick={() => setSelectedNewsDetail(null)}>
-            <div className="flex items-center justify-between pb-4 border-b-4 border-black">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-mono font-black text-[#636E72] bg-white px-2 py-1 rounded border-2 border-black">
-                  {currentRound === 0 ? '초기 속보' : `${currentRound}라운드 속보`}
-                </span>
-              </div>
-              <div className="text-right flex flex-col">
-                <span className="text-xl font-black text-[#2D3436]" style={{ fontFamily: 'serif' }}>THE MONEY EDU TIMES</span>
-                <span className="text-[10px] font-bold text-[#636E72]">Click anywhere to close</span>
+      {/* Newspaper Modal */}
+      {selectedNewsDetail && (
+        <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#Fdfbf7] border-[6px] border-[#2D3436] rounded-sm max-w-2xl w-full p-8 md:p-12 shadow-[16px_16px_0px_0px_rgba(0,0,0,1)] space-y-6 animate-in zoom-in-95 cursor-pointer" onClick={() => setSelectedNewsDetail(null)}>
+            <div className="flex flex-col items-center justify-center pb-6 border-b-[6px] border-double border-[#2D3436] space-y-2">
+              <span className="text-4xl md:text-5xl font-black text-[#1A1A1A] tracking-tighter" style={{ fontFamily: 'serif' }}>THE MONEY EDU TIMES</span>
+              <div className="w-full flex items-center justify-between text-[11px] font-bold text-[#636E72] uppercase tracking-widest border-t-2 border-b-2 border-[#1A1A1A] py-1 mt-4">
+                <span>{currentRound === 0 ? 'SPECIAL EDITION' : `ROUND ${currentRound} ISSUE`}</span>
+                <span>FINANCIAL CAMP NEWS</span>
+                <span>Click to Close</span>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-sm font-black border-b-2 border-dashed border-[#D1CCC0] pb-2">
-                <span className="text-[#2D3436] font-mono flex items-center gap-1">
-                  <Building2 size={16} />
-                  기업명: {selectedNewsDetail.targetCompany}
-                </span>
-                <span
-                  className={
-                    selectedNewsDetail.impact === 'positive'
-                      ? 'text-[#D63031]'
-                      : 'text-[#0984E3]'
-                  }
-                >
-                  {selectedNewsDetail.impact === 'positive' ? '▲ 호재' : '▼ 악재'} ({selectedNewsDetail.impact === 'positive' ? '+' : ''}{selectedNewsDetail.impactRate}%)
-                </span>
+            <div className="space-y-6">
+              <div className="flex flex-col items-center text-center space-y-3 pb-6 border-b-[3px] border-[#2D3436]/20">
+                <div className="flex items-center gap-3">
+                  <span className="bg-[#1A1A1A] text-white px-3 py-1 font-mono font-black text-sm rounded-sm">
+                    {selectedNewsDetail.targetCompany}
+                  </span>
+                  <span className={`font-black text-sm px-2 py-1 rounded-sm border-2 ${selectedNewsDetail.impact === 'positive' ? 'text-[#D63031] border-[#D63031]' : 'text-[#0984E3] border-[#0984E3]'}`}>
+                    {selectedNewsDetail.impact === 'positive' ? '▲ 호재' : '▼ 악재'} ({selectedNewsDetail.impact === 'positive' ? '+' : ''}{selectedNewsDetail.impactRate}%)
+                  </span>
+                </div>
+                <h3 className="font-black text-3xl md:text-4xl text-[#1A1A1A] leading-tight break-keep" style={{ fontFamily: 'serif' }}>
+                  {selectedNewsDetail.title}
+                </h3>
               </div>
-              <h3 className="font-black text-2xl text-[#2D3436] leading-snug" style={{ fontFamily: 'serif' }}>
-                {selectedNewsDetail.title}
-              </h3>
 
-              <div className="pt-2 text-base text-[#2D3436] leading-loose font-medium text-justify" style={{ fontFamily: 'serif' }}>
-                {selectedNewsDetail.content}
+              <div className="pt-2 text-lg md:text-xl text-[#2D3436] leading-[1.8] font-medium text-justify drop-cap" style={{ fontFamily: 'serif' }}>
+                <span className="float-left text-5xl font-black mr-2 mt-1" style={{ fontFamily: 'serif' }}>{selectedNewsDetail.content.charAt(0)}</span>
+                {selectedNewsDetail.content.slice(1)}
               </div>
             </div>
           </div>
