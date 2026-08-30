@@ -114,12 +114,27 @@ export const StudentStock: React.FC<StudentStockProps> = ({
         const localAsset = syncManager.getStudentAssetSync(session.sessionId, student.studentId, student);
         if (localAsset) setMyAsset(localAsset);
         setCompanies(syncManager.getCompanies(session.sessionId));
+        const localSession = syncManager.getSession(session.sessionId);
+        if (localSession) {
+          const localSlots = localSession.activeNewsSlots || [];
+          setSlots(localSlots);
+          const localNews = localSlots.filter((s: any) => s.isRevealed && s.news).map((s: any) => s.news);
+          // If Round 0 and no slots, maybe fallback to INITIAL_NEWS_POOL? Wait, Teacher pushes it now.
+          setRevealedNews(localNews);
+        }
       }
     } catch (e) {
       console.error(e);
       const localAsset = syncManager.getStudentAssetSync(session.sessionId, student.studentId, student);
       if (localAsset) setMyAsset(localAsset);
       setCompanies(syncManager.getCompanies(session.sessionId));
+      const localSession = syncManager.getSession(session.sessionId);
+      if (localSession) {
+        const localSlots = localSession.activeNewsSlots || [];
+        setSlots(localSlots);
+        const localNews = localSlots.filter((s: any) => s.isRevealed && s.news).map((s: any) => s.news);
+        setRevealedNews(localNews);
+      }
     }
   };
 
@@ -258,7 +273,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
               <h3 className="font-black text-base text-[#2D3436] flex items-center gap-2">
                 <span>5라운드 모의주식 시뮬레이션</span>
                 <PixelBadge variant={currentRound === 0 ? 'gold' : 'blue'}>
-                  {currentRound === 0 ? '초기 세팅 (R0)' : `ROUND ${currentRound} / 5`}
+                  {currentRound === 0 ? '0라운드(초기 상장 준비 단계)' : `ROUND ${currentRound} / 5`}
                 </PixelBadge>
               </h3>
               <span className="text-xs text-[#636E72] font-bold">

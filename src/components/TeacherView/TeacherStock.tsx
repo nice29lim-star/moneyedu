@@ -159,22 +159,15 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
     setLoading(true);
     try {
       playSuccessSound();
-      const initialNewsIds = INITIAL_NEWS_POOL.slice(0, 6).map(n => n.id);
+      const initialNews = INITIAL_NEWS_POOL.slice(0, 6).map(n => ({ ...n, roundAppeared: 0 }));
+      const initialSlots = initialNews.map((news, idx) => ({
+        slotIndex: idx,
+        news,
+        isRevealed: true,
+      }));
       
-      const response = await fetch('/api/teacher/stock/send-news', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-teacher-token': token,
-        },
-        body: JSON.stringify({
-          sessionId: session.sessionId,
-          revealedNewsIds: initialNewsIds,
-          slots: [],
-        }),
-      });
+      const result = await syncManager.sendNewsToStudents(session.sessionId, session, initialNews, initialSlots, token);
 
-      const result = await response.json();
       if (result.ok) {
         setStatusMessage('초기 6대 기사가 학생들에게 전송되었습니다!');
         onRefreshSession();
@@ -333,7 +326,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
             <h2 className="text-xl sm:text-2xl font-black text-[#2D3436] flex items-center gap-2">
               <span>📈 3단계: 5라운드 모의주식 시뮬레이션</span>
               <PixelBadge variant={currentRound === 0 ? 'gold' : 'blue'}>
-                {currentRound === 0 ? '초기 세팅 (R0)' : `ROUND ${currentRound} / 5`}
+                {currentRound === 0 ? '0라운드(초기 상장 준비 단계)' : `ROUND ${currentRound} / 5`}
               </PixelBadge>
             </h2>
             <p className="text-xs text-[#636E72] font-bold">
