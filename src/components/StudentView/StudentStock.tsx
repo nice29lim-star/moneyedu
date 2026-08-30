@@ -196,7 +196,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
   }, [session?.sessionId, student?.studentId, currentRound]);
 
   const isTradingOpen = currentState === 'trading';
-  const hasTradedThisRound = myAsset?.tradedThisRound || false;
+  const hasTradedThisRound = myAsset?.tradedThisRound || (myAsset?.lastTradeRound === currentRound);
 
   // Normalized 6 slots for display - completely bulletproof and non-duplicating
   const displaySlots = useMemo(() => {

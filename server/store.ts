@@ -132,6 +132,7 @@ export class AppStore {
       quizBonus: 0,
       cash: 0,
       initialInvestment: 0,
+      lastTradeRound: -1,
     };
     this.students.set(key, student);
     return student;
@@ -278,6 +279,7 @@ export class AppStore {
       profitAmount,
       profitRate,
       tradedThisRound,
+      lastTradeRound: student.lastTradeRound ?? -1,
     };
   }
 

@@ -447,7 +447,7 @@ export const supabaseDb = {
           profitAmount,
           selectedJob: d.selected_job,
           budget: d.budget,
-          lastTradeRound: d.last_trade_round || asset?.last_trade_round || 0,
+          lastTradeRound: d.last_trade_round ?? asset?.last_trade_round ?? -1,
           holdings: asset?.holdings ? (Array.isArray(asset.holdings) ? asset.holdings : Object.values(asset.holdings)) : [],
         };
       });
@@ -559,7 +559,7 @@ export const supabaseDb = {
         total_asset: Number(asset.totalAsset) || 0,
         profit_amount: Number(asset.profitAmount) || 0,
         profit_rate: Number(asset.profitRate) || 0,
-        last_trade_round: asset.tradedThisRound ? (asset as any).currentRound || 1 : 0,
+        last_trade_round: asset.lastTradeRound ?? -1,
         updated_at: new Date().toISOString(),
       });
       if (error) {
@@ -596,7 +596,8 @@ export const supabaseDb = {
         totalAsset: Number(data.total_asset) || 0,
         profitAmount: Number(data.profit_amount) || 0,
         profitRate: Number(data.profit_rate) || 0,
-        tradedThisRound: (Number(data.last_trade_round) || 0) > 0,
+        lastTradeRound: data.last_trade_round ?? -1,
+        tradedThisRound: false, // Let server or frontend compute this
       };
     } catch {
       return null;

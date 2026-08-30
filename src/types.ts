@@ -157,6 +157,7 @@ export interface StudentAsset {
   profitAmount: number;
   profitRate: number; // %
   tradedThisRound: boolean;
+  lastTradeRound?: number;
   lastTradeType?: 'BUY' | 'SELL';
 }
 
