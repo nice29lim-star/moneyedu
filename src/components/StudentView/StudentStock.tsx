@@ -16,6 +16,7 @@ import {
   X,
   Building2,
   RefreshCw,
+  Briefcase,
 } from 'lucide-react';
 import { Company, NewsItem, Session, Student, StudentAsset } from '../../types';
 import { PixelBadge, PixelButton, PixelCard } from '../PixelUI';
