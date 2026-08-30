@@ -14,7 +14,7 @@ import {
 import confetti from 'canvas-confetti';
 import { FinalReport, Session, Student } from '../../types';
 import { PixelBadge, PixelButton, PixelCard } from '../PixelUI';
-import { exportReportToCanvasImage } from '../../utils/canvasReportExporter';
+import { exportReportToCanvasImage, generateReportCanvas } from '../../utils/canvasReportExporter';
 import { playSuccessSound } from '../../utils/soundEffects';
 
 interface StudentReportProps {
@@ -25,6 +25,20 @@ interface StudentReportProps {
 export const StudentReport: React.FC<StudentReportProps> = ({ student, session }) => {
   const [report, setReport] = useState<FinalReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (report) {
+      setTimeout(() => {
+        try {
+          const canvas = generateReportCanvas(report);
+          if (canvas) setPreviewUrl(canvas.toDataURL('image/png'));
+        } catch (e) {
+          console.error('Preview generation failed', e);
+        }
+      }, 100);
+    }
+  }, [report]);
 
   useEffect(() => {
     if (!session?.sessionId) return;
@@ -58,10 +72,24 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
   }, [session?.sessionId, student.studentId]);
 
   const generateFallbackReport = (): FinalReport => {
+    const cleanSession = session?.sessionId?.toUpperCase() || student?.sessionId?.toUpperCase() || '';
+    const localAsset = syncManager.getStudentAssetSync(cleanSession, student.studentId, student);
     const initSeed = student?.initialInvestment ?? 0;
-    const finalAsset = student?.cash || initSeed;
+    const finalCash = localAsset ? localAsset.cash : (student?.cash || initSeed);
+    const finalStockValuation = localAsset ? localAsset.totalStockValuation : 0;
+    const finalAsset = finalCash + finalStockValuation;
     const diff = finalAsset - initSeed;
     const profitRate = initSeed > 0 ? (diff / initSeed) * 100 : 0;
+
+    let trades: any[] = [];
+    try {
+      const cleanSession = session?.sessionId?.toUpperCase() || student?.sessionId?.toUpperCase() || '';
+      const tradesStr = localStorage.getItem(`fc_trades_${cleanSession}`);
+      if (tradesStr) {
+        const allTrades = JSON.parse(tradesStr);
+        trades = allTrades.filter((t: any) => t.studentId === student?.studentId);
+      }
+    } catch {}
 
     return {
       studentId: student?.studentId || '',
@@ -97,15 +125,15 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
       },
       quizBonus: student?.quizBonus || 0,
       initialInvestment: initSeed,
-      finalCash: student?.cash || initSeed,
-      finalStockValuation: 0,
+      finalCash: finalCash,
+      finalStockValuation: finalStockValuation,
       finalTotalAsset: finalAsset,
       totalProfit: diff,
       profitRate: profitRate,
       rank: 1,
       totalStudents: 1,
       holdings: [],
-      trades: [],
+      trades: trades,
       investorType: {
         title: '스마트 밸류에이션 투자자',
         badge: '균형형',
@@ -277,6 +305,16 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
             )}
           </div>
         </div>
+
+        {/* Report Preview */}
+        {previewUrl && (
+          <div className="mt-4 border-2 border-black rounded-2xl overflow-hidden shadow-[4px_4px_0px_0px_#000]">
+            <div className="bg-[#1E293B] text-white text-center py-2 text-xs font-bold border-b-2 border-black">
+              성적표 및 수료증 미리보기
+            </div>
+            <img src={previewUrl} alt="성적표 미리보기" className="w-full h-auto object-contain" />
+          </div>
+        )}
 
         {/* Final Download Button Action */}
         <div className="pt-4 border-t-2 border-black flex flex-col sm:flex-row gap-3">

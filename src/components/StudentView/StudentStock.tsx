@@ -335,7 +335,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
           >
             <div>R0</div>
             <div className="text-[10px] font-sans font-bold mt-0.5">
-              {currentRound === 0 ? '초기 세팅' : '완료 ✓'}
+              {currentRound === 0 ? '진행중' : '완료 ✓'}
             </div>
           </div>
 
@@ -424,9 +424,39 @@ export const StudentStock: React.FC<StudentStockProps> = ({
             </div>
 
           </div>
+          </div>
         </div>
+        
+        {/* Holdings Summary */}
+        {myAsset?.holdings && Object.keys(myAsset.holdings).length > 0 && (
+          <div className="mt-4 pt-4 border-t-2 border-dashed border-[#DFE6E9]">
+            <h4 className="text-xs font-bold text-[#636E72] mb-2 flex items-center gap-1">
+              <Briefcase size={14} />
+              나의 주식 포트폴리오
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(myAsset.holdings).map(([companyName, data]) => {
+                if (data.quantity <= 0) return null;
+                const company = companies.find(c => c.name === companyName);
+                if (!company) return null;
+                const valuation = data.quantity * company.currentPrice;
+                const profitRate = data.avgBuyPrice > 0 ? ((company.currentPrice - data.avgBuyPrice) / data.avgBuyPrice) * 100 : 0;
+                
+                return (
+                  <div key={companyName} className="bg-white px-3 py-2 rounded-xl border border-black shadow-[2px_2px_0px_0px_#000] text-[11px] font-mono font-black flex items-center gap-2">
+                    <span className="text-[#2D3436]">{companyName}</span>
+                    <span className="text-[#636E72]">{data.quantity}주</span>
+                    <span className={profitRate >= 0 ? 'text-[#D63031]' : 'text-[#0984E3]'}>
+                      {profitRate >= 0 ? '▲' : '▼'}{Math.abs(profitRate).toFixed(1)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </PixelCard>
-
+      
       {/* Trade status message banner */}
       {tradeMessage && (
         <div
@@ -504,7 +534,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                           </span>
                         </div>
 
-                        <p className="text-xs font-black text-[#2D3436] leading-snug line-clamp-3 my-1" style={{ fontFamily: 'serif' }}>
+                        <p className="text-xs font-black text-[#2D3436] leading-snug line-clamp-3 my-1">
                           {news.title}
                         </p>
                       </div>
@@ -704,12 +734,28 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                       </div>
                     </div>
 
-                    <div className="text-xs text-[#636E72] flex justify-between font-mono font-bold">
+                    <div className="text-xs text-[#636E72] flex justify-between font-mono font-bold mt-1">
                       <span>예상 결제 금액:</span>
                       <span className="text-[#D63031] font-black">
                         {(c.currentPrice * tradeQuantity).toLocaleString()}원
                       </span>
                     </div>
+
+                    <div className="text-xs text-[#636E72] flex justify-between font-mono font-bold mt-1">
+                      <span>보유 현금:</span>
+                      <span className="font-black text-[#0984E3]">
+                        {(myAsset?.cash ?? student.cash ?? 0).toLocaleString()}원
+                      </span>
+                    </div>
+                    
+                    {((myAsset?.cash ?? student.cash ?? 0) - c.currentPrice * tradeQuantity) >= 0 && (
+                      <div className="text-xs text-[#636E72] flex justify-between font-mono font-bold mt-1 pt-1 border-t border-dashed border-[#B2BEC3]">
+                        <span>매수 후 예상 잔액:</span>
+                        <span className="font-black text-[#2D3436]">
+                          {((myAsset?.cash ?? student.cash ?? 0) - c.currentPrice * tradeQuantity).toLocaleString()}원
+                        </span>
+                      </div>
+                    )}
 
                     {/* Buy & Sell Buttons */}
                     <div className="grid grid-cols-2 gap-2 pt-1">

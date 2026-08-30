@@ -1,6 +1,7 @@
 import { FinalReport } from '../types';
 
-export function exportReportToCanvasImage(report: FinalReport) {
+export function generateReportCanvas(report: FinalReport): HTMLCanvasElement | null {
+
   const width = 800;
   const height = 1050;
 
@@ -204,9 +205,15 @@ export function exportReportToCanvasImage(report: FinalReport) {
   ctx.restore();
 
   // Download Trigger
+  return canvas;
+}
+
+export function exportReportToCanvasImage(report: FinalReport) {
+  const canvas = generateReportCanvas(report);
+  if (!canvas) return;
   const dataUrl = canvas.toDataURL('image/png');
   const link = document.createElement('a');
-  link.download = `금융캠프_성적표_${report.studentName}_${report.studentNum}.png`;
+  link.download = 금융캠프_성적표__.png;
   link.href = dataUrl;
   link.click();
 }

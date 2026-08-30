@@ -373,14 +373,12 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
                 : 'bg-[#F8F9FA] text-[#A4B0BE]'
             }`}
           >
-            <div className="text-[11px] font-mono font-black">초기 세팅 (R0)</div>
+            <div className="text-[11px] font-mono font-black">R0 (초기 상장)</div>
             <div className="text-xs font-black mt-0.5">
               {currentRound === 0 ? (
-                <span className="text-[#D63031]">
-                  {currentState === 'trading' ? '초기 상장 진행중' : currentState === 'news' ? '기사 전송 완료' : '세팅 예정'}
-                </span>
+                <span className="text-[#D63031] font-bold">진행 중</span>
               ) : (
-                <span className="text-[#00B894]">세팅 완료 ✓</span>
+                <span className="text-[#00B894] font-bold">완료 ✓</span>
               )}
             </div>
           </div>
