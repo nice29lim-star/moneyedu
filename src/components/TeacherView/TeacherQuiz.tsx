@@ -106,6 +106,11 @@ export const TeacherQuiz: React.FC<TeacherQuizProps> = ({
     // Broadcast instant sync to students
     syncManager.broadcast('QUIZ_INDEX_CHANGED', { sessionId: session.sessionId, quizIndex: clampedIdx });
 
+    if (session) {
+      const updatedSession = { ...session, currentQuizIndex: clampedIdx };
+      syncManager.saveSession(updatedSession);
+    }
+
     try {
       await fetch('/api/teacher/quiz/set', {
         method: 'POST',
