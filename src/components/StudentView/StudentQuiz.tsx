@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Coins, Wallet, Award, Presentation, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
+import { Sparkles, Coins, Wallet, Award, Presentation, ArrowRight, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Session, Student } from '../../types';
 import { PixelBadge, PixelButton, PixelCard } from '../PixelUI';
 import { playCoinSound } from '../../utils/soundEffects';
 import { syncManager } from '../../utils/syncManager';
+import { INITIAL_QUIZZES } from '../../data/seedData';
 
 interface StudentQuizProps {
   student: Student;
@@ -15,6 +16,20 @@ export const StudentQuiz: React.FC<StudentQuizProps> = ({ student, session }) =>
   const [showBonusCelebration, setShowBonusCelebration] = useState(false);
   const [bonusAddedAmount, setBonusAddedAmount] = useState<number>(0);
   const [localBonus, setLocalBonus] = useState(student?.quizBonus || 0);
+  
+  // Track quiz attempts locally (persisted to localStorage so it survives refresh during the same session)
+  const [attemptedQuizzes, setAttemptedQuizzes] = useState<Record<number, 'correct' | 'incorrect'>>(() => {
+    try {
+      const stored = localStorage.getItem(`fc_quiz_attempts_${session?.sessionId}_${student?.studentId}`);
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const currentQuizIndex = session?.currentQuizIndex || 0;
+  const currentQuiz = INITIAL_QUIZZES[currentQuizIndex];
+  const attemptStatus = attemptedQuizzes[currentQuizIndex]; // 'correct' | 'incorrect' | undefined
 
   // Sync props to local state
   useEffect(() => {
@@ -52,6 +67,25 @@ export const StudentQuiz: React.FC<StudentQuizProps> = ({ student, session }) =>
     };
   }, [student?.studentId, student?.name]);
 
+  const handleOptionSelect = async (selectedIndex: number) => {
+    if (attemptStatus) return; // Already attempted this question
+
+    const isCorrect = selectedIndex === currentQuiz.answerIndex;
+    const newStatus = isCorrect ? 'correct' : 'incorrect';
+
+    // Update local attempt state
+    const newAttemptedQuizzes = { ...attemptedQuizzes, [currentQuizIndex]: newStatus };
+    setAttemptedQuizzes(newAttemptedQuizzes);
+    try {
+      localStorage.setItem(`fc_quiz_attempts_${session?.sessionId}_${student?.studentId}`, JSON.stringify(newAttemptedQuizzes));
+    } catch {}
+
+    if (isCorrect && session?.sessionId && student?.studentId) {
+      // Correct answer! Request 100,000 won bonus
+      await syncManager.studentGiveBonus(session.sessionId, student.studentId, 100000);
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Top Student Header */}
@@ -79,7 +113,7 @@ export const StudentQuiz: React.FC<StudentQuizProps> = ({ student, session }) =>
       </div>
 
       {/* Main Student Balance & Focus Card */}
-      <PixelCard className="bg-white border-4 border-black p-6 sm:p-8 rounded-3xl shadow-[8px_8px_0px_0px_#000] text-center space-y-6">
+      <PixelCard className="bg-white border-4 border-black p-6 sm:p-8 rounded-3xl shadow-[8px_8px_0px_0px_#000] space-y-6 text-center">
         {/* Large Bonus Balance Display */}
         <div className="bg-[#FFFBEB] p-6 rounded-3xl border-3 border-black shadow-[4px_4px_0px_0px_#000] space-y-2">
           <div className="flex items-center justify-center gap-1.5 text-xs font-black text-[#636E72] uppercase tracking-wider">
@@ -96,30 +130,59 @@ export const StudentQuiz: React.FC<StudentQuizProps> = ({ student, session }) =>
           </p>
         </div>
 
-        {/* Teacher Screen Focus Guide */}
-        <div className="bg-[#F8F9FA] p-5 sm:p-6 rounded-2xl border-2 border-black shadow-[3px_3px_0px_0px_#000] text-left space-y-3">
-          <div className="flex items-center gap-2 font-black text-sm text-[#2D3436]">
-            <div className="p-1.5 bg-[#74B9FF] text-[#1A1A1A] border-2 border-black rounded-xl shadow-[1px_1px_0px_0px_#000]">
-              <Presentation size={18} />
+        {/* Real-time Quiz Section */}
+        {currentQuiz && (
+          <div className="bg-[#F8F9FA] p-5 sm:p-6 rounded-2xl border-2 border-black shadow-[3px_3px_0px_0px_#000] text-left space-y-4">
+            <div className="flex items-center gap-2 font-black text-sm text-[#2D3436] mb-2">
+              <div className="p-1.5 bg-[#74B9FF] text-[#1A1A1A] border-2 border-black rounded-xl shadow-[1px_1px_0px_0px_#000]">
+                <Presentation size={18} />
+              </div>
+              <span>현재 퀴즈 (Q{currentQuiz.id})</span>
             </div>
-            <span>앞쪽 선생님 화면의 금융 퀴즈를 함께 풀어보세요!</span>
-          </div>
 
-          <p className="text-xs sm:text-sm text-[#636E72] font-bold leading-relaxed pl-1">
-            퀴즈 문제는 선생님 화면에 실시간으로 출제됩니다.<br />
-            손을 들고 정답을 맞히면 선생님이 <strong className="text-[#00B894]">보너스 상금</strong>을 즉시 지급해 드립니다!
-          </p>
+            <div className="bg-white border-2 border-black p-4 rounded-xl shadow-[2px_2px_0px_0px_#000]">
+              <p className="font-bold text-[#2D3436] text-[15px] leading-relaxed break-keep">
+                {currentQuiz.question}
+              </p>
+            </div>
 
-          <div className="pt-3 border-t-2 border-black/10 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
-            <span className="flex items-center gap-1.5 text-[#0984E3]">
-              <Clock size={14} />
-              다음 단계: 직업 선택 ➔ 통장 배분 ➔ 모의주식
-            </span>
-            <span className="px-2.5 py-1 bg-white rounded-lg border border-black text-[#636E72]">
-              강사 화면 전환 대기 중
-            </span>
+            {attemptStatus ? (
+              <div className={`p-4 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_#000] flex items-center justify-center gap-2 font-black text-lg ${attemptStatus === 'correct' ? 'bg-[#EBFBF7] text-[#00B894]' : 'bg-[#FFF0F0] text-[#FF7675]'}`}>
+                {attemptStatus === 'correct' ? (
+                  <>
+                    <CheckCircle2 className="w-6 h-6" />
+                    <span>정답입니다! (+10만원)</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-6 h-6" />
+                    <span>아쉽게도 오답입니다. (다음 문제를 기다려주세요)</span>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                {currentQuiz.options.map((opt, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleOptionSelect(idx)}
+                    className="p-4 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#000] font-bold text-sm text-[#2D3436] hover:bg-[#F1F3F5] active:translate-y-[2px] active:shadow-none transition-all text-left"
+                  >
+                    <span className="inline-block w-6 h-6 text-center leading-6 bg-[#2D3436] text-white rounded-md mr-2">
+                      {idx + 1}
+                    </span>
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            <p className="text-[11px] text-[#636E72] font-bold text-center mt-2">
+              * 기회는 단 1번뿐입니다. 신중하게 선택하세요!
+            </p>
           </div>
-        </div>
+        )}
+
       </PixelCard>
 
       {/* Bonus Award Celebration Popup Modal */}
@@ -135,7 +198,7 @@ export const StudentQuiz: React.FC<StudentQuizProps> = ({ student, session }) =>
             </h3>
             
             <p className="text-xs sm:text-sm text-[#636E72] font-bold">
-              선생님으로부터 퀴즈 정답 보너스가 지급되었습니다!
+              퀴즈 정답 보너스가 지급되었습니다!
             </p>
 
             {bonusAddedAmount > 0 && (

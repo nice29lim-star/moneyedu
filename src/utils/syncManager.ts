@@ -420,6 +420,68 @@ export const syncManager = {
     }
   },
 
+  // Student directly claims bonus
+  studentGiveBonus: async (sessionId: string, studentId: string, amount: number): Promise<boolean> => {
+    if (!sessionId || !studentId) return false;
+    const cleanSession = sessionId.toUpperCase();
+
+    // Fire Supabase Bonus Update
+    if (supabaseDb.isReady()) {
+      supabaseDb.awardQuizBonus(cleanSession, studentId, amount).catch(() => {});
+    }
+
+    // 1. Try Express API
+    try {
+      const res = await fetch('/api/student/quiz/bonus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: cleanSession, studentId, amount }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok) {
+          // Sync locally as well
+          const localList = syncManager.getLocalStudents(cleanSession);
+          const st = localList.find((s) => s.studentId === studentId);
+          if (st) {
+            st.quizBonus = (st.quizBonus || 0) + amount;
+            st.cash = (st.cash || 0) + amount;
+            syncManager.saveStudentLocally(cleanSession, st);
+          }
+          syncManager.broadcast('BONUS_AWARDED', { sessionId: cleanSession, studentId, amount, name: st?.name });
+          syncManager.sendToGoogleSheets('giveBonus', {
+            sessionId: cleanSession,
+            studentId,
+            amount,
+            student: st,
+          });
+          return true;
+        }
+      }
+    } catch {}
+
+    // 2. Guaranteed LocalStorage Update & Broadcast
+    try {
+      const localList = syncManager.getLocalStudents(cleanSession);
+      const st = localList.find((s) => s.studentId === studentId);
+      if (st) {
+        st.quizBonus = (st.quizBonus || 0) + amount;
+        st.cash = (st.cash || 0) + amount;
+        syncManager.saveStudentLocally(cleanSession, st);
+      }
+      syncManager.broadcast('BONUS_AWARDED', { sessionId: cleanSession, studentId, amount, name: st?.name });
+      syncManager.sendToGoogleSheets('giveBonus', {
+        sessionId: cleanSession,
+        studentId,
+        amount,
+        student: st,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   // Poll active session from Supabase -> Express -> GAS -> LocalStorage
   pollSessionState: async (sessionId: string, studentId?: string) => {
     if (!sessionId) return null;

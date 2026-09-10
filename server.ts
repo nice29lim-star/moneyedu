@@ -217,7 +217,32 @@ async function startServer() {
     }
 
     session.currentModule = moduleName;
+    if (moduleName === 'stock') {
+      session.stockRound = 0;
+      session.stockState = 'waiting';
+    } else if (moduleName === 'report') {
+      session.isCompleted = true;
+    }
     res.json({ ok: true, session, message: `모듈이 [${moduleName}]으로 변경되었습니다.` });
+  });
+
+  // 7.1 Teacher Session Module Update (Fallback for missing endpoint)
+  app.post('/api/teacher/session/module', requireTeacher, (req, res) => {
+    const { sessionId, currentModule } = req.body;
+    const session = appStore.getSession(sessionId);
+    if (!session) {
+      res.status(404).json({ ok: false, message: '세션을 찾을 수 없습니다.' });
+      return;
+    }
+
+    session.currentModule = currentModule;
+    if (currentModule === 'stock') {
+      session.stockRound = 0;
+      session.stockState = 'waiting';
+    } else if (currentModule === 'report') {
+      session.isCompleted = true;
+    }
+    res.json({ ok: true, session, message: `모듈이 [${currentModule}]으로 변경되었습니다.` });
   });
 
   // 8. Quizzes
@@ -261,6 +286,38 @@ async function startServer() {
       ok: true,
       student,
       message: `${student.name} 학생에게 보너스 ${bonusAmount.toLocaleString()}원이 즉시 지급되었습니다!`,
+    });
+  });
+
+  // 9.1 Student Quiz Auto Bonus
+  app.post('/api/student/quiz/bonus', (req, res) => {
+    const { sessionId, studentId, amount } = req.body;
+    if (!sessionId || !studentId) {
+      res.status(400).json({ ok: false, message: '잘못된 요청입니다.' });
+      return;
+    }
+
+    const student = appStore.getStudent(sessionId, studentId);
+    if (!student) {
+      res.status(404).json({ ok: false, message: '학생을 찾을 수 없습니다.' });
+      return;
+    }
+
+    const bonusAmount = Number(amount) || 0;
+    student.quizBonus += bonusAmount;
+    student.cash += bonusAmount; // Also increases student's trading cash immediately
+
+    // If student already configured budget, update total available
+    if (student.budget) {
+      student.budget.quizBonus = student.quizBonus;
+      student.budget.totalAvailable += bonusAmount;
+      student.budget.investAmount += bonusAmount;
+    }
+
+    res.json({
+      ok: true,
+      student,
+      message: `정답입니다! 보너스 ${bonusAmount.toLocaleString()}원이 지급되었습니다!`,
     });
   });
 
