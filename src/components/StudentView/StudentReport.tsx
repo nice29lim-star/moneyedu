@@ -43,7 +43,7 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
   useEffect(() => {
     if (!session?.sessionId) return;
     fetch(
-      `/api/student/report?sessionId=${session.sessionId}&studentId=${student.studentId}`
+      `/api/student/final-report?sessionId=${session.sessionId}&studentId=${student.studentId}`
     )
       .then((r) => r.json())
       .then((data) => {
@@ -65,18 +65,17 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
         }
         setLoading(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error(err);
         setReport(generateFallbackReport());
         setLoading(false);
       });
   }, [session?.sessionId, student.studentId]);
 
   const generateFallbackReport = (): FinalReport => {
-    const cleanSession = session?.sessionId?.toUpperCase() || student?.sessionId?.toUpperCase() || '';
-    const localAsset = syncManager.getStudentAssetSync(cleanSession, student.studentId, student);
     const initSeed = student?.initialInvestment ?? 0;
-    const finalCash = localAsset ? localAsset.cash : (student?.cash || initSeed);
-    const finalStockValuation = localAsset ? localAsset.totalStockValuation : 0;
+    const finalCash = student?.cash || initSeed;
+    const finalStockValuation = 0;
     const finalAsset = finalCash + finalStockValuation;
     const diff = finalAsset - initSeed;
     const profitRate = initSeed > 0 ? (diff / initSeed) * 100 : 0;

@@ -12,7 +12,7 @@ export const INITIAL_JOBS: Job[] = [
   },
   {
     id: 2,
-    title: '시중은행 행원',
+    title: '시중은행 은행원',
     category: '금융 / 은행',
     monthlySalary: 3300000,
     description: '고객에게 예적금, 대출 상담 및 맞춤형 자산관리 서비스를 제공합니다.',
