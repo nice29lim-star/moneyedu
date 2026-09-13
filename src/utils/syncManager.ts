@@ -1060,7 +1060,7 @@ export const syncManager = {
       const revealedIds = updatedSession.revealedNewsIds || [];
       const revealedNewsList = INITIAL_NEWS_POOL.filter((n) => revealedIds.includes(n.id));
 
-      // In Round 0 (initial setup), stock prices don't change yet; prices change from 1R to 5R
+      // In Round 0 (initial setup), stock prices don't change yet; prices change from 1R to 10R
       if (curRound >= 1 && revealedNewsList.length > 0) {
         companies = companies.map((c) => {
           const matchingNews = revealedNewsList.filter(
@@ -1094,15 +1094,15 @@ export const syncManager = {
         updatedSession.stockState = 'waiting';
         updatedSession.revealedNewsIds = [];
         updatedSession.activeNewsSlots = [];
-      } else if (curRound < 5) {
-        // 1R~4R 마감 -> 다음 라운드로 전환
+      } else if (curRound < 10) {
+        // 1R~9R 마감 -> 다음 라운드로 전환
         updatedSession.stockRound = curRound + 1;
         updatedSession.stockState = 'waiting';
         updatedSession.revealedNewsIds = [];
         updatedSession.activeNewsSlots = [];
       } else {
-        // 5R 마감 -> 완료 및 리포트 이동
-        updatedSession.stockRound = 5;
+        // 10R 마감 -> 완료 및 리포트 이동
+        updatedSession.stockRound = 10;
         updatedSession.stockState = 'closed';
         updatedSession.isCompleted = true;
         updatedSession.currentModule = 'report';
@@ -1110,7 +1110,7 @@ export const syncManager = {
       }
     }
 
-    // Automatically prepare candidate slots for the new round if moving to 1~5
+    // Automatically prepare candidate slots for the new round if moving to 1~10
     if (updatedSession.stockRound >= 1 && !updatedSession.isCompleted) {
       try {
         const prep = await syncManager.prepareCandidateSlots(cleanSession, updatedSession, token);
@@ -1142,7 +1142,7 @@ export const syncManager = {
       companies,
       isCompleted,
       message: isCompleted
-        ? '5라운드 모의주식이 모두 마감되었습니다! 최종 리포트로 이동합니다.'
+        ? '10라운드 모의주식이 모두 마감되었습니다! 최종 리포트로 이동합니다.'
         : `제 ${finalRound}라운드가 준비되었습니다. 새로운 뉴스를 확인하고 학생들에게 공개해주세요!`,
     };
   },
@@ -1205,8 +1205,15 @@ export const syncManager = {
 
     // 1. Get current asset state
     let asset = syncManager.getStudentAssetSync(cleanSession, studentId, studentObj);
-    const holdings: Record<string, StockHolding> = { ...(asset?.holdings || {}) };
-    const currentHolding: StockHolding = holdings[company.name] || {
+    
+    const holdingsMap: Record<string, StockHolding> = {};
+    if (Array.isArray(asset?.holdings)) {
+      asset.holdings.forEach(h => { if (h && h.companyName) holdingsMap[h.companyName] = h; });
+    } else if (asset?.holdings) {
+      Object.values(asset.holdings).forEach((h: any) => { if (h && h.companyName) holdingsMap[h.companyName] = h; });
+    }
+
+    const currentHolding: StockHolding = holdingsMap[company.name] || {
       companyName: company.name,
       quantity: 0,
       avgBuyPrice: 0,
@@ -1225,7 +1232,7 @@ export const syncManager = {
       const newTotalCost = currentHolding.quantity * currentHolding.avgBuyPrice + totalAmount;
       currentHolding.quantity = newQty;
       currentHolding.avgBuyPrice = Math.round(newTotalCost / newQty);
-      holdings[company.name] = currentHolding;
+      holdingsMap[company.name] = currentHolding;
     } else {
       // SELL
       if (currentHolding.quantity < qty) {
@@ -1239,14 +1246,14 @@ export const syncManager = {
       if (currentHolding.quantity === 0) {
         currentHolding.avgBuyPrice = 0;
       }
-      holdings[company.name] = currentHolding;
+      holdingsMap[company.name] = currentHolding;
     }
 
     // Calculate total valuation
     const priceMap = new Map(companies.map((c) => [c.name, c.currentPrice]));
 
     let totalStockValuation = 0;
-    for (const h of Object.values(holdings) as StockHolding[]) {
+    for (const h of Object.values(holdingsMap) as StockHolding[]) {
       if (h.quantity > 0) {
         const curP = priceMap.get(h.companyName) || h.avgBuyPrice;
         totalStockValuation += h.quantity * curP;
@@ -1258,12 +1265,17 @@ export const syncManager = {
     const profitAmount = totalAsset - initialInvestment;
     const profitRate = initialInvestment > 0 ? parseFloat(((profitAmount / initialInvestment) * 100).toFixed(2)) : 0;
 
+    const finalHoldingsMap: Record<string, StockHolding> = {};
+    for (const [k, v] of Object.entries(holdingsMap)) {
+      if (v.quantity > 0) finalHoldingsMap[k] = v;
+    }
+
     const updatedAsset: StudentAsset = {
       studentId: studentId,
       studentName: studentName,
       cash: newCash,
       initialInvestment,
-      holdings,
+      holdings: finalHoldingsMap,
       totalStockValuation,
       totalAsset,
       profitAmount,

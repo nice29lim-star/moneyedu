@@ -460,22 +460,36 @@ export const supabaseDb = {
     const sb = getSupabase();
     if (!sb) return false;
     try {
-      // Fetch current bonus
-      const current = await supabaseDb.getStudent(sessionId, studentId);
+      const cleanSession = sessionId.toUpperCase();
+      // Fetch current merged student data
+      const allStudents = await supabaseDb.getStudentsInSession(cleanSession);
+      const current = allStudents.find(s => s.studentId === studentId);
+      
       const newBonus = (current?.quizBonus || 0) + bonusAmount;
       const newCash = (current?.cash || 0) + bonusAmount;
 
-      const { error } = await sb
+      // Update students table
+      const { error: err1 } = await sb
         .from('students')
         .update({
           quiz_bonus: newBonus,
           cash: newCash,
           updated_at: new Date().toISOString(),
         })
-        .eq('session_id', sessionId.toUpperCase())
+        .eq('session_id', cleanSession)
         .eq('student_id', studentId);
 
-      return !error;
+      // Update student_assets table
+      const { error: err2 } = await sb
+        .from('student_assets')
+        .update({
+          cash: newCash,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('session_id', cleanSession)
+        .eq('student_id', studentId);
+
+      return !err1;
     } catch {
       return false;
     }
