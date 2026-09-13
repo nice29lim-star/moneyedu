@@ -109,6 +109,7 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
       } catch (err) {
         console.error(err);
         setReport(generateFallbackReport());
+      } finally {
         setLoading(false);
       }
     };

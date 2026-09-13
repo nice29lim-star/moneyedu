@@ -191,6 +191,13 @@ export const syncManager = {
     const profitAmount = totalAsset - initialInvestment;
     const profitRate = initialInvestment > 0 ? (profitAmount / initialInvestment) * 100 : Number(st.profitRate ?? 0);
 
+    let parsedHoldings: Record<string, any> = {};
+    if (Array.isArray(st.holdings)) {
+      st.holdings.forEach((h: any) => { if (h && h.companyName) parsedHoldings[h.companyName] = h; });
+    } else if (st.holdings && typeof st.holdings === 'object') {
+      Object.values(st.holdings).forEach((h: any) => { if (h && h.companyName) parsedHoldings[h.companyName] = h; });
+    }
+
     return {
       studentId: String(st.studentId || `${st.name || '학생'}_${st.studentNum || '00'}`),
       name: String(st.name || '학생'),
@@ -205,7 +212,7 @@ export const syncManager = {
       totalAsset,
       profitRate: isNaN(profitRate) ? 0 : profitRate,
       profitAmount,
-      holdings: Array.isArray(st.holdings) ? st.holdings : [],
+      holdings: parsedHoldings,
       loginTime: st.loginTime || Date.now(),
     };
   },
