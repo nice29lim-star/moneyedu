@@ -279,13 +279,39 @@ export const syncManager = {
   fetchStudents: async (sessionId: string, token: string): Promise<any[]> => {
     if (!sessionId) return [];
     const cleanSession = sessionId.toUpperCase();
+    const companies = syncManager.getCompanies(cleanSession);
+
+    const recalculateAssets = (students: any[]) => {
+      return students.map(st => {
+        if (companies && companies.length > 0) {
+          let stockValuation = 0;
+          const holdings = st.holdings;
+          if (Array.isArray(holdings)) {
+            holdings.forEach((h: any) => {
+              const comp = companies.find(c => c.name === h.companyName);
+              if (comp) stockValuation += comp.currentPrice * h.quantity;
+            });
+          } else if (holdings) {
+            Object.values(holdings).forEach((h: any) => {
+              const comp = companies.find(c => c.name === h.companyName);
+              if (comp) stockValuation += comp.currentPrice * h.quantity;
+            });
+          }
+          st.stockValuation = stockValuation;
+          st.totalAsset = st.cash + stockValuation;
+          st.profitAmount = st.totalAsset - st.initialInvestment;
+          st.profitRate = st.initialInvestment > 0 ? (st.profitAmount / st.initialInvestment) * 100 : 0;
+        }
+        return st;
+      });
+    };
 
     // 1. Try Supabase Cloud Database First (Fastest & Authoritative)
     if (supabaseDb.isReady()) {
       try {
         const sbStudents = await supabaseDb.getStudentsInSession(cleanSession);
         if (Array.isArray(sbStudents)) {
-          return sbStudents.map(syncManager.normalizeStudent);
+          return recalculateAssets(sbStudents.map(syncManager.normalizeStudent));
         }
       } catch {}
     }
@@ -314,7 +340,7 @@ export const syncManager = {
             localStorage.setItem(`fc_students_${cleanSession}`, JSON.stringify(combined));
           } catch {}
           
-          return combined;
+          return recalculateAssets(combined);
         }
       }
     } catch {}
@@ -348,14 +374,14 @@ export const syncManager = {
                 combined.push(loc);
               }
             });
-            return combined;
+            return recalculateAssets(combined);
           }
         }
       } catch {}
     }
 
     // 4. Fallback: LocalStorage students
-    return syncManager.getLocalStudents(cleanSession);
+    return recalculateAssets(syncManager.getLocalStudents(cleanSession));
   },
 
   // Give bonus to student (tries Supabase -> Express -> GAS -> LocalStorage)

@@ -205,7 +205,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
           <PixelButton variant="gold" size="md" onClick={handleSaveCheckpoint} disabled={saving}>
             <span className="flex items-center gap-2">
               <Save size={16} />
-              <span>상장 마감 (안전 저장)</span>
+              <span>라운드 중간 저장</span>
             </span>
           </PixelButton>
         </div>
