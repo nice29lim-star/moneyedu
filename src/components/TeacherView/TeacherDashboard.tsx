@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabaseDb } from '../../utils/supabaseClient';
 import {
   Copy,
   Check,
@@ -241,25 +242,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
     setIsAwarding(true);
     try {
-      const res = await fetch('/api/teacher/give-bonus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
-        body: JSON.stringify({
-          sessionId: session.sessionId,
-          studentId: selectedStudentForBonus.studentId,
-          amount: Number(bonusAmount),
-          token,
-        }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        playCoinSound();
-        setBonusMessage(data.message);
-        fetchDashboard();
-        setTimeout(() => {
-          setSelectedStudentForBonus(null);
-          setBonusMessage('');
-        }, 1200);
+      if (supabaseDb.isReady()) {
+        const success = await supabaseDb.awardQuizBonus(session.sessionId, selectedStudentForBonus.studentId, Number(bonusAmount));
+        if (success) {
+          playCoinSound();
+          setBonusMessage(`${selectedStudentForBonus.name} 학생에게 보너스가 지급되었습니다.`);
+          fetchDashboard();
+          setTimeout(() => {
+            setSelectedStudentForBonus(null);
+            setBonusMessage('');
+          }, 1200);
+        } else {
+          setBonusMessage('지급 실패');
+        }
       }
     } catch (err) {
       console.error(err);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { syncManager } from '../../utils/syncManager';
 import {
   Trophy,
   Download,
@@ -42,15 +43,57 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
 
   useEffect(() => {
     if (!session?.sessionId) return;
-    fetch(
-      `/api/student/final-report?sessionId=${session.sessionId}&studentId=${student.studentId}`
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.ok && data.report) {
-          setReport(data.report);
+    const fetchReport = async () => {
+      try {
+        const students = await syncManager.fetchStudents(session.sessionId, 'dummy');
+        const calculated = students.map((st: any) => {
+          const seed = st.initialInvestment ?? 0;
+          const finalAsset = st.totalAsset || st.cash || seed;
+          const diff = finalAsset - seed;
+          const profitRate = seed > 0 ? (diff / seed) * 100 : 0;
+          return { ...st, finalTotalAsset: finalAsset, profitRate, diff, seed };
+        });
+        calculated.sort((a, b) => b.finalTotalAsset - a.finalTotalAsset);
+        const myRank = calculated.findIndex((s) => s.studentId === student.studentId) + 1;
+        const myData = calculated.find((s) => s.studentId === student.studentId);
+        
+        if (myData) {
+          const reportObj: any = {
+            studentId: myData.studentId,
+            studentName: myData.name,
+            name: myData.name,
+            studentNum: myData.studentNum,
+            jobTitle: myData.jobTitle || '참가자',
+            quizBonus: myData.quizBonus || 0,
+            initialInvestment: myData.seed,
+            finalCash: myData.cash || 0,
+            finalStockValuation: myData.stockValuation || 0,
+            finalTotalAsset: myData.finalTotalAsset,
+            totalProfit: myData.diff,
+            profitRate: myData.profitRate,
+            rank: myRank,
+            totalStudents: students.length,
+            holdings: myData.holdings || [],
+            trades: [],
+            investorType: {
+              title: myData.profitRate >= 10 ? '스마트 성장형 투자자' : '안정 균형형 투자자',
+              badge: myData.profitRate >= 10 ? '🚀 공격적 성장 추구' : '🛡️ 안정적 자산 배분',
+              description: myData.profitRate >= 10
+                  ? '시장의 기회를 적극적으로 포착하여 높은 성과를 이뤄냈습니다.'
+                  : '위험을 관리하며 꾸준하고 건전한 투자를 지향했습니다.',
+              tips: '앞으로도 분산투자와 복리의 힘을 활용하여 장기적인 금융 자산을 형성해 보세요.',
+            },
+            gradeLevel: myData.profitRate >= 15 ? 'A' : myData.profitRate >= 5 ? 'B' : myData.profitRate >= -5 ? 'C' : 'D',
+            feedback: myData.profitRate >= 15
+                ? '탁월한 통찰력과 분산 투자로 최고의 성과를 거두었습니다!'
+                : myData.profitRate >= 0
+                ? '안정적인 자산 배분으로 플러스 수익을 달성했습니다.'
+                : '시장 변동성 속에서 귀중한 실전 경험을 쌓았습니다.',
+          };
+          
+          setReport(reportObj);
           playSuccessSound();
-          if (data.report.profitRate >= 0) {
+          if (reportObj.profitRate >= 0) {
             try {
               confetti({
                 particleCount: 100,
@@ -58,18 +101,19 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
                 origin: { y: 0.5 },
                 colors: ['#F59E0B', '#38BDF8', '#10B981', '#F43F5E'],
               });
-            } catch {}
+            } catch (e) {}
           }
         } else {
           setReport(generateFallbackReport());
         }
-        setLoading(false);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error(err);
         setReport(generateFallbackReport());
         setLoading(false);
-      });
+      }
+    };
+    
+    fetchReport();
   }, [session?.sessionId, student.studentId]);
 
   const generateFallbackReport = (): FinalReport => {

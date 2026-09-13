@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { supabaseDb } from '../../utils/supabaseClient';
 import {
   TrendingUp,
   TrendingDown,
@@ -62,20 +63,19 @@ export const StudentStock: React.FC<StudentStockProps> = ({
   const currentRound = session?.stockRound ?? 0;
 
   const fetchAssetAndMarket = async () => {
-    if (!session?.sessionId) return;
+    if (!session?.sessionId || !student?.studentId) return;
     try {
-      const pollRes = await fetch(
-        `/api/session/poll?sessionId=${session.sessionId}&studentId=${student.studentId}`
-      );
-      const pollData = await pollRes.json();
-      if (pollData.ok) {
-        if (pollData.companies && pollData.companies.length > 0) {
-          syncManager.saveCompanies(session.sessionId, pollData.companies);
-          setCompanies(pollData.companies);
+      const result = await syncManager.getRealtimeStockData(session.sessionId);
+      if (result.ok) {
+        if (result.companies && result.companies.length > 0) {
+          syncManager.saveCompanies(session.sessionId, result.companies);
+          setCompanies(result.companies);
         }
-        setRevealedNews(pollData.revealedNews || []);
-        if (pollData.myAsset) {
-          setMyAsset(pollData.myAsset);
+        setRevealedNews(result.revealedNews || []);
+        
+        const stAsset = result.students?.find((s: any) => s.studentId === student.studentId);
+        if (stAsset) {
+          setMyAsset(stAsset);
         }
       }
     } catch (e) {
@@ -163,14 +163,15 @@ export const StudentStock: React.FC<StudentStockProps> = ({
         localStorage.setItem(`fc_checkpoint_${session.sessionId}_${student.studentId}`, JSON.stringify(myAsset));
       }
       
-      const res = await fetch('/api/student/stock/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.sessionId, studentId: student.studentId }),
-      });
-      const result = await res.json();
+      let message = '저장 완료!';
+      if (supabaseDb.isReady() && myAsset) {
+         const success = await supabaseDb.upsertStudentAsset({ ...myAsset, sessionId: session.sessionId });
+         if (success) {
+             message = '클라우드 저장 완료!';
+         }
+      }
       
-      setTradeMessage({ type: 'success', text: result.message || '저장 완료!' });
+      setTradeMessage({ type: 'success', text: message });
     } catch (e) {
       console.error(e);
       setTradeMessage({ type: 'success', text: '브라우저 안전 저장 완료!' });

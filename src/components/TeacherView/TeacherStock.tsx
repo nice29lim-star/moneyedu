@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { supabaseDb } from '../../utils/supabaseClient';
 import {
   LayoutDashboard,
   Award,
@@ -47,15 +48,12 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
   const fetchStockData = async () => {
     if (!session?.sessionId) return;
     try {
-      const pollRes = await fetch(`/api/teacher/stock/status?sessionId=${session.sessionId}`, {
-        headers: { 'x-teacher-token': token },
-      });
-      const pollData = await pollRes.json();
-      if (pollData.ok) {
-        setCompanies(pollData.companies || syncManager.getCompanies(session.sessionId));
-        setRevealedNews(pollData.revealedNews || []);
-        if (pollData.students) {
-          setStudents(pollData.students);
+      const result = await syncManager.getRealtimeStockData(session.sessionId);
+      if (result.ok) {
+        setCompanies(result.companies || []);
+        setRevealedNews(result.revealedNews || []);
+        if (result.students) {
+          setStudents(result.students);
         }
       }
     } catch (e) {
@@ -93,15 +91,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
     setLoading(true);
     try {
       playSuccessSound();
-      const res = await fetch('/api/teacher/stock/next-news', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-teacher-token': token,
-        },
-        body: JSON.stringify({ sessionId: session.sessionId }),
-      });
-      const result = await res.json();
+      const result = await syncManager.advanceStockRound(session.sessionId, token);
       if (result.ok) {
         setStatusMessage(result.message);
         onRefreshSession();
@@ -123,15 +113,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
     setLoading(true);
     try {
       playCoinSound();
-      const res = await fetch('/api/teacher/stock/end', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-teacher-token': token,
-        },
-        body: JSON.stringify({ sessionId: session.sessionId }),
-      });
-      const result = await res.json();
+      const result = await syncManager.forceEndStockMarket(session.sessionId, token);
       if (result.ok) {
         setStatusMessage(result.message);
         onRefreshSession();
@@ -161,18 +143,15 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
     }
 
     try {
-      playCoinSound();
-      const res = await fetch('/api/teacher/give-bonus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
-        body: JSON.stringify({ sessionId: session.sessionId, studentId, amount, token }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setStatusMessage(`${name} 학생에게 ${amount.toLocaleString()}원의 투자금이 지급되었습니다.`);
-        fetchStockData();
-      } else {
-        alert(data.message || '보너스 지급 실패');
+      if (supabaseDb.isReady()) {
+        const success = await supabaseDb.awardQuizBonus(session.sessionId, studentId, amount);
+        if (success) {
+          playCoinSound();
+          setStatusMessage(`${name} 학생에게 ${amount.toLocaleString()}원의 투자금이 지급되었습니다.`);
+          fetchStockData();
+        } else {
+          alert('지급 실패');
+        }
       }
     } catch (e: any) {
       console.error(e);

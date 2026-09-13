@@ -121,7 +121,9 @@ async function startServer() {
 
   // 5. Student Login
   app.post('/api/student/login', (req, res) => {
-    const { sessionId, name, studentNum } = req.body;
+    const sessionId = req.body.sessionId;
+    const name = req.body.student?.name || req.body.name;
+    const studentNum = req.body.student?.studentNum || req.body.studentNum;
     if (!sessionId || !name || !studentNum) {
       res.status(400).json({ ok: false, message: '초대코드, 이름, 학번을 모두 입력해주세요.' });
       return;

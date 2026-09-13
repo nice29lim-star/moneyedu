@@ -1349,5 +1349,160 @@ export const syncManager = {
 
     return syncManager.getStudentAssetSync(cleanSession, studentId, fallbackStudent);
   },
-};
 
+  // ==========================================
+  // Vercel Compatible Stock Logic (Client-side + Supabase)
+  // ==========================================
+
+  advanceStockRound: async (sessionId: string, token: string) => {
+    const cleanSession = sessionId.toUpperCase();
+    const currentSession = syncManager.getSession(cleanSession);
+    if (!currentSession) return { ok: false, message: '세션을 찾을 수 없습니다.' };
+
+    const companies = syncManager.getCompanies(cleanSession);
+
+    if (currentSession.stockRound > 0) {
+      const revealedNews = INITIAL_NEWS_POOL.filter((n) => currentSession.revealedNewsIds?.includes(n.id));
+      if (revealedNews.length > 0) {
+        for (const company of companies) {
+          let impactPercent = 0;
+          const matchingNews = revealedNews.filter(
+            (n) => n.targetCompany === company.name || (n.targetIndustry && company.industry.includes(n.targetIndustry))
+          );
+          if (matchingNews.length > 0) {
+            impactPercent = matchingNews.reduce((acc, curr) => acc + curr.impactRate, 0);
+          } else {
+            impactPercent = Math.floor(Math.random() * 7) - 3;
+          }
+          impactPercent = Math.max(-30, Math.min(35, impactPercent));
+
+          const oldPrice = company.currentPrice;
+          const changeAmount = Math.round((oldPrice * impactPercent) / 100);
+          let newPrice = Math.max(1000, Math.round((oldPrice + changeAmount) / 100) * 100);
+
+          company.currentPrice = newPrice;
+          company.changeRate = parseFloat((((newPrice - oldPrice) / oldPrice) * 100).toFixed(2));
+          company.priceHistory.push(newPrice);
+        }
+      }
+    }
+
+    if (currentSession.stockRound < 10) {
+      currentSession.stockRound += 1;
+      currentSession.stockState = 'trading';
+
+      let usedSetStr = localStorage.getItem(`fc_used_news_${cleanSession}`);
+      let usedSet = usedSetStr ? new Set<number>(JSON.parse(usedSetStr)) : new Set<number>();
+      
+      const availableNews = INITIAL_NEWS_POOL.filter((n) => !usedSet.has(n.id));
+      const shuffled = [...availableNews].sort(() => Math.random() - 0.5);
+      const pickedNews = shuffled.slice(0, 3);
+      
+      currentSession.revealedNewsIds = pickedNews.map(n => n.id);
+      currentSession.activeNewsSlots = pickedNews.map((news, idx) => ({
+        slotIndex: idx,
+        news: { ...news, roundAppeared: currentSession.stockRound },
+        isRevealed: true,
+      }));
+
+      pickedNews.forEach(n => usedSet.add(n.id));
+      localStorage.setItem(`fc_used_news_${cleanSession}`, JSON.stringify(Array.from(usedSet)));
+
+      syncManager.saveCompanies(cleanSession, companies);
+      await syncManager.saveSession(currentSession);
+      
+      if (supabaseDb.isReady()) {
+         supabaseDb.upsertSession(currentSession).catch(()=>{});
+      }
+
+      syncManager.broadcast('STOCK_STATE_CHANGED', {
+        sessionId: cleanSession,
+        session: currentSession,
+      });
+
+      return { 
+        ok: true, 
+        session: currentSession, 
+        companies, 
+        newNews: pickedNews, 
+        message: `${currentSession.stockRound}/10 뉴스 갱신 및 주가 변동이 완료되었습니다.` 
+      };
+    } else {
+      return { ok: false, message: '이미 10라운드까지 진행되었습니다. 모의주식을 종료해주세요.' };
+    }
+  },
+
+  forceEndStockMarket: async (sessionId: string, token: string) => {
+    const cleanSession = sessionId.toUpperCase();
+    const currentSession = syncManager.getSession(cleanSession);
+    if (!currentSession) return { ok: false, message: '세션을 찾을 수 없습니다.' };
+
+    const companies = syncManager.getCompanies(cleanSession);
+
+    if (currentSession.stockRound > 0) {
+      const revealedNews = INITIAL_NEWS_POOL.filter((n) => currentSession.revealedNewsIds?.includes(n.id));
+      if (revealedNews.length > 0) {
+        for (const company of companies) {
+          let impactPercent = 0;
+          const matchingNews = revealedNews.filter(
+            (n) => n.targetCompany === company.name || (n.targetIndustry && company.industry.includes(n.targetIndustry))
+          );
+          if (matchingNews.length > 0) {
+            impactPercent = matchingNews.reduce((acc, curr) => acc + curr.impactRate, 0);
+          } else {
+            impactPercent = Math.floor(Math.random() * 7) - 3;
+          }
+          impactPercent = Math.max(-30, Math.min(35, impactPercent));
+
+          const oldPrice = company.currentPrice;
+          const changeAmount = Math.round((oldPrice * impactPercent) / 100);
+          let newPrice = Math.max(1000, Math.round((oldPrice + changeAmount) / 100) * 100);
+
+          company.currentPrice = newPrice;
+          company.changeRate = parseFloat((((newPrice - oldPrice) / oldPrice) * 100).toFixed(2));
+          company.priceHistory.push(newPrice);
+        }
+      }
+    }
+    
+    currentSession.stockState = 'closed';
+    currentSession.isCompleted = true;
+    currentSession.currentModule = 'report';
+    
+    syncManager.saveCompanies(cleanSession, companies);
+    await syncManager.saveSession(currentSession);
+    
+    if (supabaseDb.isReady()) {
+       supabaseDb.upsertSession(currentSession).catch(()=>{});
+    }
+
+    syncManager.broadcast('STOCK_STATE_CHANGED', {
+      sessionId: cleanSession,
+      session: currentSession,
+    });
+    
+    syncManager.updateSessionModule(cleanSession, 'report', token);
+
+    return { ok: true, session: currentSession, companies, message: '모의주식이 종료되고 최종 리포트로 이동합니다.' };
+  },
+
+  getRealtimeStockData: async (sessionId: string) => {
+    const cleanSession = sessionId.toUpperCase();
+    const session = syncManager.getSession(cleanSession);
+    const companies = syncManager.getCompanies(cleanSession);
+    
+    let students = syncManager.getLocalStudents(cleanSession);
+    if (supabaseDb.isReady()) {
+      try {
+        const sbStudents = await supabaseDb.getStudentsInSession(cleanSession);
+        if (sbStudents && sbStudents.length > 0) {
+          students = sbStudents.map(syncManager.normalizeStudent);
+        }
+      } catch {}
+    }
+    
+    const revealedNews = INITIAL_NEWS_POOL.filter((n) => session?.revealedNewsIds?.includes(n.id));
+
+    return { ok: true, session, companies, students, revealedNews };
+  },
+};
