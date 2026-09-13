@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { syncManager } from '../../utils/syncManager';
+import { supabaseDb } from '../../utils/supabaseClient';
 import {
   Trophy,
   Download,
@@ -58,6 +59,7 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
         const myData = calculated.find((s) => s.studentId === student.studentId);
         
         if (myData) {
+          const sbTrades = await supabaseDb.getTrades(session.sessionId, student.studentId);
           const reportObj: any = {
             studentId: myData.studentId,
             studentName: myData.name,
@@ -74,7 +76,7 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
             rank: myRank,
             totalStudents: students.length,
             holdings: myData.holdings || [],
-            trades: [],
+            trades: sbTrades || [],
             investorType: {
               title: myData.profitRate >= 10 ? '스마트 성장형 투자자' : '안정 균형형 투자자',
               badge: myData.profitRate >= 10 ? '🚀 공격적 성장 추구' : '🛡️ 안정적 자산 배분',
@@ -120,8 +122,8 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
   const generateFallbackReport = (): FinalReport => {
     const initSeed = student?.initialInvestment ?? 0;
     const finalCash = student?.cash || initSeed;
-    const finalStockValuation = 0;
-    const finalAsset = finalCash + finalStockValuation;
+    const finalStockValuation = student?.stockValuation || 0;
+    const finalAsset = student?.totalAsset || (finalCash + finalStockValuation);
     const diff = finalAsset - initSeed;
     const profitRate = initSeed > 0 ? (diff / initSeed) * 100 : 0;
 

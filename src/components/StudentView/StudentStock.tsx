@@ -389,8 +389,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                   </div>
                 </div>
 
-                {/* Price History Sparkline */}
-                <CompanyChart company={c} />
 
                 {/* My Holdings in this Company */}
                 <div className="bg-[#F8F9FA] p-2.5 rounded-xl border-2 border-black text-xs font-mono flex justify-between items-center text-[#2D3436]">
