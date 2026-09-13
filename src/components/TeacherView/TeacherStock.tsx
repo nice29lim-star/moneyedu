@@ -47,18 +47,16 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
   const fetchStockData = async () => {
     if (!session?.sessionId) return;
     try {
-      const pollRes = await fetch(`/api/session/poll?sessionId=${session.sessionId}`);
+      const pollRes = await fetch(`/api/teacher/stock/status?sessionId=${session.sessionId}`, {
+        headers: { 'x-teacher-token': token },
+      });
       const pollData = await pollRes.json();
       if (pollData.ok) {
         setCompanies(pollData.companies || syncManager.getCompanies(session.sessionId));
         setRevealedNews(pollData.revealedNews || []);
-      } else {
-        setCompanies(syncManager.getCompanies(session.sessionId));
-      }
-
-      const studentList = await syncManager.fetchStudents(session.sessionId, token);
-      if (Array.isArray(studentList)) {
-        setStudents(studentList);
+        if (pollData.students) {
+          setStudents(pollData.students);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -99,7 +97,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'x-teacher-token': token,
         },
         body: JSON.stringify({ sessionId: session.sessionId }),
       });
@@ -129,7 +127,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'x-teacher-token': token,
         },
         body: JSON.stringify({ sessionId: session.sessionId }),
       });
