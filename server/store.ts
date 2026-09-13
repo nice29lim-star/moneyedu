@@ -283,167 +283,115 @@ export class AppStore {
     };
   }
 
-  // Prepare 6 candidates for the round
-  public prepareRoundCandidates(sessionId: string): {
-    slots: { slotIndex: number; news: NewsItem | null; isRevealed: boolean }[];
-  } {
+  // Teacher advances round and reveals 3 new news
+  public advanceStockRound(sessionId: string): { ok: boolean; session?: Session; companies?: Company[]; newNews?: NewsItem[]; message?: string } {
     const session = this.getSession(sessionId);
-    if (!session) return { slots: [] };
+    if (!session) return { ok: false, message: '세션을 찾을 수 없습니다.' };
 
-    // If slots already exist for this round, return them
-    if (session.activeNewsSlots && session.activeNewsSlots.length === 6 && session.activeNewsSlots.some((s) => s.news !== null)) {
-      return { slots: session.activeNewsSlots };
-    }
+    const companies = this.getCompanies(sessionId);
 
-    const usedSet = this.usedNewsIds.get(sessionId.toUpperCase()) || new Set<number>();
-    const availableNews = this.newsPool.filter((n) => !usedSet.has(n.id));
+    // Apply price changes based on previous round's news (if any)
+    if (session.stockRound > 0) {
+      const revealedNews = this.newsPool.filter((n) => session.revealedNewsIds.includes(n.id));
+      if (revealedNews.length > 0) {
+        for (const company of companies) {
+          let impactPercent = 0;
+          const matchingNews = revealedNews.filter(
+            (n) =>
+              n.targetCompany === company.name ||
+              (n.targetIndustry && company.industry.includes(n.targetIndustry))
+          );
+          if (matchingNews.length > 0) {
+            impactPercent = matchingNews.reduce((acc, curr) => acc + curr.impactRate, 0);
+          } else {
+            impactPercent = Math.floor(Math.random() * 7) - 3;
+          }
+          impactPercent = Math.max(-30, Math.min(35, impactPercent));
 
-    // Pick 6 news candidates
-    const shuffled = [...availableNews].sort(() => Math.random() - 0.5);
-    const candidates = shuffled.slice(0, 6);
+          const oldPrice = company.currentPrice;
+          const changeAmount = Math.round((oldPrice * impactPercent) / 100);
+          let newPrice = Math.max(1000, Math.round((oldPrice + changeAmount) / 100) * 100);
 
-    // If available pool exhausted, fallback to any news not already picked in this round
-    if (candidates.length < 6) {
-      const pickedIds = new Set(candidates.map((c) => c.id));
-      const remainingPool = [...this.newsPool]
-        .filter((n) => !pickedIds.has(n.id))
-        .sort(() => Math.random() - 0.5);
-      candidates.push(...remainingPool.slice(0, 6 - candidates.length));
-    }
-
-    session.activeNewsSlots = candidates.map((news, idx) => ({
-      slotIndex: idx,
-      news: { ...news, roundAppeared: session.stockRound },
-      isRevealed: false,
-    }));
-    session.revealedNewsIds = [];
-
-    return { slots: session.activeNewsSlots };
-  }
-
-  // Flip a slot (Teacher clicks 1 of the 6 cards)
-  public flipSlot(sessionId: string, slotIndex: number): {
-    ok: boolean;
-    session: Session;
-    slots: { slotIndex: number; news: NewsItem | null; isRevealed: boolean }[];
-    revealedNews: NewsItem[];
-    revealedCount: number;
-    message: string;
-  } {
-    const session = this.getSession(sessionId);
-    if (!session) {
-      return { ok: false, session: null as any, slots: [], revealedNews: [], revealedCount: 0, message: '세션이 없습니다.' };
-    }
-
-    if (!session.activeNewsSlots || session.activeNewsSlots.length !== 6 || !session.activeNewsSlots[0]?.news) {
-      this.prepareRoundCandidates(sessionId);
-    }
-
-    const targetSlot = session.activeNewsSlots.find((s) => s.slotIndex === slotIndex);
-    if (!targetSlot || !targetSlot.news) {
-      return { ok: false, session, slots: session.activeNewsSlots, revealedNews: [], revealedCount: 0, message: '슬롯을 찾을 수 없습니다.' };
-    }
-
-    const currentlyRevealed = session.activeNewsSlots.filter((s) => s.isRevealed);
-
-    if (targetSlot.isRevealed) {
-      targetSlot.isRevealed = false;
-    } else {
-      if (currentlyRevealed.length >= 3) {
-        return {
-          ok: false,
-          session,
-          slots: session.activeNewsSlots,
-          revealedNews: session.activeNewsSlots.filter((s) => s.isRevealed).map((s) => s.news!),
-          revealedCount: currentlyRevealed.length,
-          message: '이미 3개의 뉴스가 선택되었습니다. 다른 카드를 선택하려면 기존 카드를 다시 클릭하여 닫으세요.',
-        };
+          company.currentPrice = newPrice;
+          company.changeRate = parseFloat((((newPrice - oldPrice) / oldPrice) * 100).toFixed(2));
+          company.priceHistory.push(newPrice);
+        }
       }
-      targetSlot.isRevealed = true;
     }
 
-    const newRevealedSlots = session.activeNewsSlots.filter((s) => s.isRevealed);
-    const newRevealedNews = newRevealedSlots.map((s) => s.news!).filter(Boolean);
-    session.revealedNewsIds = newRevealedNews.map((n) => n.id);
+    if (session.stockRound < 10) {
+      session.stockRound += 1;
+      session.stockState = 'trading';
 
-    return {
-      ok: true,
-      session,
-      slots: session.activeNewsSlots,
-      revealedNews: newRevealedNews,
-      revealedCount: newRevealedSlots.length,
-      message: `${newRevealedSlots.length}/3개 선택됨.`,
-    };
-  }
+      // Pick 3 random news
+      const usedSet = this.usedNewsIds.get(sessionId.toUpperCase()) || new Set<number>();
+      const availableNews = this.newsPool.filter((n) => !usedSet.has(n.id));
+      
+      const shuffled = [...availableNews].sort(() => Math.random() - 0.5);
+      const pickedNews = shuffled.slice(0, 3);
+      
+      session.revealedNewsIds = pickedNews.map(n => n.id);
+      session.activeNewsSlots = pickedNews.map((news, idx) => ({
+        slotIndex: idx,
+        news: { ...news, roundAppeared: session.stockRound },
+        isRevealed: true,
+      }));
 
-  // Teacher sends chosen news to students
-  public sendNews(
-    sessionId: string,
-    revealedNewsIds: number[],
-    slots: { slotIndex: number; news: NewsItem | null; isRevealed: boolean }[]
-  ): { ok: boolean; session: Session | null } {
-    const session = this.getSession(sessionId);
-    if (!session) return { ok: false, session: null };
+      pickedNews.forEach(n => usedSet.add(n.id));
+      this.usedNewsIds.set(sessionId.toUpperCase(), usedSet);
 
-    session.stockState = 'news';
-    session.revealedNewsIds = revealedNewsIds;
-    session.activeNewsSlots = slots;
-
-    // Track used news IDs to avoid repeating in future rounds
-    const usedSet = this.usedNewsIds.get(sessionId.toUpperCase()) || new Set<number>();
-    revealedNewsIds.forEach((id) => usedSet.add(id));
-    this.usedNewsIds.set(sessionId.toUpperCase(), usedSet);
-
-    return { ok: true, session };
-  }
-
-  // Reset candidates
-  public resetRoundSlots(sessionId: string): {
-    slots: { slotIndex: number; news: NewsItem | null; isRevealed: boolean }[];
-  } {
-    const session = this.getSession(sessionId);
-    if (!session) return { slots: [] };
-
-    session.activeNewsSlots = [];
-    session.revealedNewsIds = [];
-    session.stockState = 'waiting';
-    return this.prepareRoundCandidates(sessionId);
-  }
-
-  public revealNewsForRound(sessionId: string, count: number = 3): {
-    revealedNews: NewsItem[];
-    slots: { slotIndex: number; news: NewsItem | null; isRevealed: boolean }[];
-  } {
-    const session = this.getSession(sessionId);
-    if (!session) return { revealedNews: [], slots: [] };
-
-    if (!session.activeNewsSlots || session.activeNewsSlots.length !== 6 || !session.activeNewsSlots[0]?.news) {
-      this.prepareRoundCandidates(sessionId);
+      return { 
+        ok: true, 
+        session, 
+        companies, 
+        newNews: pickedNews, 
+        message: `${session.stockRound}/10 뉴스 갱신 및 주가 변동이 완료되었습니다.` 
+      };
+    } else {
+      return { ok: false, message: '이미 10라운드까지 진행되었습니다. 모의주식을 종료해주세요.' };
     }
+  }
 
-    // Pick 3 random slots among 0..5
-    const slotIndices = [0, 1, 2, 3, 4, 5].sort(() => Math.random() - 0.5);
-    const pickedSlots = slotIndices.slice(0, count);
+  // Teacher forcefully ends the stock market
+  public endStockMarket(sessionId: string): { ok: boolean; session?: Session; companies?: Company[]; message?: string } {
+    const session = this.getSession(sessionId);
+    if (!session) return { ok: false, message: '세션을 찾을 수 없습니다.' };
+    
+    const companies = this.getCompanies(sessionId);
 
-    session.activeNewsSlots.forEach((slot, idx) => {
-      slot.isRevealed = pickedSlots.includes(idx);
-    });
+    // Apply final price changes
+    if (session.stockRound > 0) {
+      const revealedNews = this.newsPool.filter((n) => session.revealedNewsIds.includes(n.id));
+      if (revealedNews.length > 0) {
+        for (const company of companies) {
+          let impactPercent = 0;
+          const matchingNews = revealedNews.filter(
+            (n) =>
+              n.targetCompany === company.name ||
+              (n.targetIndustry && company.industry.includes(n.targetIndustry))
+          );
+          if (matchingNews.length > 0) {
+            impactPercent = matchingNews.reduce((acc, curr) => acc + curr.impactRate, 0);
+          } else {
+            impactPercent = Math.floor(Math.random() * 7) - 3;
+          }
+          impactPercent = Math.max(-30, Math.min(35, impactPercent));
 
-    const revealed = session.activeNewsSlots.filter((s) => s.isRevealed).map((s) => s.news!).filter(Boolean);
-    session.revealedNewsIds = revealed.map((p) => p.id);
+          const oldPrice = company.currentPrice;
+          const changeAmount = Math.round((oldPrice * impactPercent) / 100);
+          let newPrice = Math.max(1000, Math.round((oldPrice + changeAmount) / 100) * 100);
 
-    const usedSet = this.usedNewsIds.get(sessionId.toUpperCase()) || new Set<number>();
-    revealed.forEach((item) => {
-      usedSet.add(item.id);
-    });
-    this.usedNewsIds.set(sessionId.toUpperCase(), usedSet);
-
-    session.stockState = 'news';
-
-    return {
-      revealedNews: revealed,
-      slots: session.activeNewsSlots,
-    };
+          company.currentPrice = newPrice;
+          company.changeRate = parseFloat((((newPrice - oldPrice) / oldPrice) * 100).toFixed(2));
+          company.priceHistory.push(newPrice);
+        }
+      }
+    }
+    
+    session.stockState = 'closed';
+    session.isCompleted = true;
+    session.currentModule = 'report';
+    return { ok: true, session, companies, message: '모의주식이 종료되고 최종 리포트로 이동합니다.' };
   }
 
   public executeTrade(
@@ -457,6 +405,10 @@ export class AppStore {
     if (!session) {
       session = this.createSession(sessionId);
       session.stockState = 'trading';
+    }
+
+    if (session.stockState === 'closed') {
+      return { ok: false, message: '모의주식이 종료되어 매매할 수 없습니다.' };
     }
 
     let student = this.getStudent(sessionId, studentId);
@@ -539,80 +491,6 @@ export class AppStore {
 
     const asset = this.getStudentAsset(sessionId, studentId);
     return { ok: true, message: `${companyName} ${quantity}주 ${tradeType === 'BUY' ? '매수' : '매도'} 완료!`, asset: asset || undefined };
-  }
-
-  public closeTradingAndApplyPriceChanges(sessionId: string): {
-    nextRound: number;
-    isCompleted: boolean;
-    companies: Company[];
-  } {
-    const session = this.getSession(sessionId);
-    if (!session) return { nextRound: 1, isCompleted: false, companies: [] };
-
-    const companies = this.getCompanies(sessionId);
-    const revealedNews = this.newsPool.filter((n) => session.revealedNewsIds.includes(n.id));
-
-    // Calculate price changes for each company (if round >= 1)
-    if (session.stockRound >= 1 && revealedNews.length > 0) {
-      for (const company of companies) {
-        let impactPercent = 0;
-        const matchingNews = revealedNews.filter(
-          (n) =>
-            n.targetCompany === company.name ||
-            (n.targetIndustry && company.industry.includes(n.targetIndustry))
-        );
-
-        if (matchingNews.length > 0) {
-          impactPercent = matchingNews.reduce((acc, curr) => acc + curr.impactRate, 0);
-        } else {
-          // Minor market fluctuation (-3% ~ +3%)
-          impactPercent = Math.floor(Math.random() * 7) - 3;
-        }
-
-        // Max fluctuation bounds (-30% ~ +35%)
-        impactPercent = Math.max(-30, Math.min(35, impactPercent));
-
-        const oldPrice = company.currentPrice;
-        const changeAmount = Math.round((oldPrice * impactPercent) / 100);
-        // Round to nearest 100 KRW
-        let newPrice = Math.max(1000, Math.round((oldPrice + changeAmount) / 100) * 100);
-
-        company.currentPrice = newPrice;
-        company.changeRate = parseFloat((((newPrice - oldPrice) / oldPrice) * 100).toFixed(2));
-        company.priceHistory.push(newPrice);
-      }
-    }
-
-    if (session.stockRound === 0) {
-      session.stockRound = 1;
-      session.stockState = 'waiting';
-      session.revealedNewsIds = [];
-      session.activeNewsSlots = [];
-      return {
-        nextRound: 1,
-        isCompleted: false,
-        companies,
-      };
-    } else if (session.stockRound < 5) {
-      session.stockRound += 1;
-      session.stockState = 'waiting';
-      session.revealedNewsIds = [];
-      session.activeNewsSlots = [];
-      return {
-        nextRound: session.stockRound,
-        isCompleted: false,
-        companies,
-      };
-    } else {
-      session.stockState = 'closed';
-      session.isCompleted = true;
-      session.currentModule = 'report';
-      return {
-        nextRound: 5,
-        isCompleted: true,
-        companies,
-      };
-    }
   }
 
   public getFinalReport(sessionId: string, studentId: string): FinalReport | null {

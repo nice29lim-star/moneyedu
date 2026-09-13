@@ -1,23 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
-  TrendingUp,
-  Newspaper,
-  Play,
-  CheckCircle,
   LayoutDashboard,
-  ArrowRight,
-  Sparkles,
-  AlertCircle,
-  Activity,
   Award,
   X,
-  Building2,
+  Activity,
+  Newspaper,
   Send,
-  RotateCcw,
-  Eye,
-  Info,
+  CheckCircle,
+  Gift
 } from 'lucide-react';
-import { Company, NewsItem, Session } from '../../types';
+import { Company, NewsItem, Session, Student } from '../../types';
 import { PixelBadge, PixelButton, PixelCard } from '../PixelUI';
 import {
   playCoinSound,
@@ -27,7 +19,6 @@ import {
 } from '../../utils/soundEffects';
 import { CompanyChart } from '../CompanyChart';
 import { syncManager } from '../../utils/syncManager';
-import { INITIAL_NEWS_POOL } from '../../data/seedData';
 
 interface TeacherStockProps {
   session: Session | null;
@@ -46,19 +37,12 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
 }) => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [revealedNews, setRevealedNews] = useState<NewsItem[]>([]);
-  const [slots, setSlots] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [statusMessage, setStatusMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedNewsDetail, setSelectedNewsDetail] = useState<NewsItem | null>(null);
-  const [showInitialNewsModal, setShowInitialNewsModal] = useState(false);
-  const [showSendNewsModal, setShowSendNewsModal] = useState(false);
 
-  // Added for R0 flow
-  const [isR0NewsIssued, setIsR0NewsIssued] = useState(false);
-
-  const currentRound = session?.stockRound ?? 0;
-  const currentState = session?.stockState || 'waiting';
+  const currentRound = session?.stockRound || 0;
 
   const fetchStockData = async () => {
     if (!session?.sessionId) return;
@@ -68,11 +52,6 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
       if (pollData.ok) {
         setCompanies(pollData.companies || syncManager.getCompanies(session.sessionId));
         setRevealedNews(pollData.revealedNews || []);
-        if (pollData.slots && pollData.slots.length > 0) {
-          setSlots(pollData.slots);
-        } else if (session.activeNewsSlots && session.activeNewsSlots.length > 0) {
-          setSlots(session.activeNewsSlots);
-        }
       } else {
         setCompanies(syncManager.getCompanies(session.sessionId));
       }
@@ -83,23 +62,11 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
       }
     } catch (e) {
       console.error(e);
-      setCompanies(syncManager.getCompanies(session.sessionId));
     }
   };
 
   useEffect(() => {
     fetchStockData();
-    // Prepare candidate slots for round 1-5 if empty
-    if (session?.sessionId && currentRound >= 1 && (!slots || slots.length !== 6 || !slots[0]?.news)) {
-      syncManager.prepareCandidateSlots(session.sessionId, session, token).then((res) => {
-        if (res?.slots) setSlots(res.slots);
-      });
-    }
-
-    // Auto open initial overview news modal if round is 0 on mount
-    if (currentRound === 0 && !session?.isCompleted) {
-      setShowInitialNewsModal(true);
-    }
 
     const interval = setInterval(fetchStockData, 2500);
 
@@ -121,222 +88,103 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
       clearInterval(interval);
       unsubscribe();
     };
-  }, [session?.sessionId, token, currentRound]);
+  }, [session?.sessionId, token]);
 
-  // Handle Slot Flip (Pick up to 3 cards)
-  const handleSlotFlip = async (slotIndex: number) => {
-    if (!session?.sessionId) return;
-    const slot = slots.find((s) => s.slotIndex === slotIndex || s.slotIndex === undefined && slots.indexOf(s) === slotIndex);
-    
-    // If already revealed, show the newspaper popup
-    if (slot?.isRevealed && slot?.news) {
-      playSelectSound();
-      setSelectedNewsDetail(slot.news);
-      return;
-    }
-
-    // In R0, we can't flip new cards (they are all revealed at once)
-    if (currentRound === 0) return;
-
-    if (currentState === 'trading' || currentState === 'closed') {
-      return;
-    }
-
-    setLoading(true);
-    try {
-      playFlipSound();
-      const result = await syncManager.flipStockNewsSlot(session.sessionId, session, slotIndex, token, 6);
-      if (result.ok) {
-        setStatusMessage(result.message);
-        setSlots(result.slots);
-        setRevealedNews(result.revealedNews);
-        onRefreshSession();
-        fetchStockData();
-      } else {
-        setStatusMessage(result.message);
-      }
-    } catch (e: any) {
-      console.error(e);
-      setStatusMessage(`오류 발생: ${e.message || '통신 오류'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Action: R0 Issue News (Only reveal on Teacher Screen)
-  const handleIssueR0News = () => {
-    playSuccessSound();
-    setIsR0NewsIssued(true);
-    const initialNews = INITIAL_NEWS_POOL.slice(0, 6).map(n => ({ ...n, roundAppeared: 0 }));
-    const initialSlots = initialNews.map((news, idx) => ({
-      slotIndex: idx,
-      news,
-      isRevealed: true,
-    }));
-    setSlots(initialSlots);
-  };
-
-  // Action: Send Initial 6 News for Round 0
-  const handleSendInitialNews = async () => {
+  const handleNextNews = async () => {
     if (!session?.sessionId) return;
     setLoading(true);
     try {
       playSuccessSound();
-      const initialNews = INITIAL_NEWS_POOL.slice(0, 6).map(n => ({ ...n, roundAppeared: 0 }));
-      const initialSlots = initialNews.map((news, idx) => ({
-        slotIndex: idx,
-        news,
-        isRevealed: true,
-      }));
-      
-      const result = await syncManager.sendNewsToStudents(session.sessionId, session, initialNews, initialSlots, token);
-
+      const res = await fetch('/api/teacher/stock/next-news', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ sessionId: session.sessionId }),
+      });
+      const result = await res.json();
       if (result.ok) {
-        setStatusMessage('초기 6대 기사가 학생들에게 전송되었습니다!');
+        setStatusMessage(result.message);
         onRefreshSession();
         fetchStockData();
       } else {
-        setStatusMessage(result.message || '전송 실패');
+        setStatusMessage(result.message || '뉴스 갱신에 실패했습니다.');
       }
     } catch (e: any) {
       console.error(e);
-      setStatusMessage(`오류 발생: ${e.message || '통신 오류'}`);
+      setStatusMessage(`오류 발생: ${e.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Action: Send the 3 selected news items to students
-  const handleSendNewsToStudents = async () => {
+  const handleEndStock = async () => {
     if (!session?.sessionId) return;
-    const chosenNews = slots.filter((s) => s.isRevealed && s.news).map((s) => s.news);
-    if (chosenNews.length === 0) {
-      setStatusMessage('신문 기사를 하나 이상 선택한 후 학생들에게 전송할 수 있습니다.');
+    if (!confirm('정말 모의주식을 종료하시겠습니까? 학생들의 거래가 중지되고 리포트로 이동합니다.')) return;
+    setLoading(true);
+    try {
+      playCoinSound();
+      const res = await fetch('/api/teacher/stock/end', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ sessionId: session.sessionId }),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        setStatusMessage(result.message);
+        onRefreshSession();
+        fetchStockData();
+        setTimeout(() => {
+          onGoToReport();
+        }, 1500);
+      } else {
+        setStatusMessage(result.message || '종료에 실패했습니다.');
+      }
+    } catch (e: any) {
+      console.error(e);
+      setStatusMessage(`오류 발생: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGiveBonus = async (studentId: string, name: string) => {
+    if (!session?.sessionId) return;
+    const amountStr = prompt(`${name} 학생에게 지급할 보너스(투자금) 금액을 입력하세요. (단위: 원)`);
+    if (!amountStr) return;
+    const amount = parseInt(amountStr, 10);
+    if (isNaN(amount) || amount <= 0) {
+      alert('올바른 금액을 입력해주세요.');
       return;
     }
 
-    setLoading(true);
     try {
-      playSuccessSound();
-      const result = await syncManager.sendNewsToStudents(session.sessionId, session, chosenNews, slots, token);
-      if (result.ok) {
-        setStatusMessage(result.message);
-        setRevealedNews(result.revealedNews);
-        setShowSendNewsModal(false);
-        onRefreshSession();
-        fetchStockData();
-      }
-    } catch (e: any) {
-      console.error(e);
-      setStatusMessage(`오류 발생: ${e.message || '통신 오류'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Action: Reset slots to choose cards again
-  const handleResetSlots = async () => {
-    if (!session?.sessionId) return;
-    setLoading(true);
-    try {
-      playFlipSound();
-      const result = await syncManager.resetStockNewsSlots(session.sessionId, session, token);
-      if (result?.slots) {
-        setSlots(result.slots);
-        setRevealedNews([]);
-        setStatusMessage('슬롯이 초기화되었습니다. 카드를 클릭해 선택해주세요!');
-        onRefreshSession();
-        fetchStockData();
-      }
-    } catch (e: any) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Action: Auto Random 3 selection
-  const handleRevealRandom3 = async () => {
-    if (!session?.sessionId) return;
-    setLoading(true);
-    try {
-      const result = await syncManager.revealStockNews(session.sessionId, session, token, 3);
-      if (result.ok) {
-        playSuccessSound();
-        setStatusMessage(result.message);
-        setRevealedNews(result.revealedNews);
-        setSlots(result.slots);
-        onRefreshSession();
-        fetchStockData();
-      }
-    } catch (e: any) {
-      console.error(e);
-      setStatusMessage(`오류 발생: ${e.message || '통신 오류'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Action: Start Trading (Open Buy / Sell for Students)
-  const handleStartTrading = async () => {
-    if (!session?.sessionId) return;
-    setLoading(true);
-    try {
-      const result = await syncManager.startStockTrading(session.sessionId, session, token);
-      if (result.ok) {
-        playSuccessSound();
-        setStatusMessage(result.message);
-        onRefreshSession();
+      playCoinSound();
+      const res = await fetch('/api/teacher/give-bonus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
+        body: JSON.stringify({ sessionId: session.sessionId, studentId, amount, token }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setStatusMessage(`${name} 학생에게 ${amount.toLocaleString()}원의 투자금이 지급되었습니다.`);
         fetchStockData();
       } else {
-        setStatusMessage(result.message || '상장 시작에 실패했습니다.');
+        alert(data.message || '보너스 지급 실패');
       }
     } catch (e: any) {
       console.error(e);
-      setStatusMessage(`오류 발생: ${e.message || '통신 오류'}`);
-    } finally {
-      setLoading(false);
+      alert('오류가 발생했습니다.');
     }
   };
-
-  // Action: Close Trading & Advance Round
-  const handleCloseTrading = async () => {
-    if (!session?.sessionId) return;
-    setLoading(true);
-    try {
-      const result = await syncManager.closeStockTrading(session.sessionId, session, token);
-      if (result.ok) {
-        playCoinSound();
-        setStatusMessage(result.message);
-        if (result.companies) setCompanies(result.companies);
-        onRefreshSession();
-        fetchStockData();
-        if (result.isCompleted) {
-          setTimeout(() => {
-            onGoToReport();
-          }, 1500);
-        }
-      } else {
-        setStatusMessage(result.message || '상장 마감에 실패했습니다.');
-      }
-    } catch (e: any) {
-      console.error(e);
-      setStatusMessage(`오류 발생: ${e.message || '통신 오류'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const tradedCountInCurrentRound = students.filter(
-    (s) => s.lastTradeRound === currentRound
-  ).length;
-
-  const revealedSlotCount = slots.filter((s) => s.isRevealed).length;
-  const initialOverviewNews = INITIAL_NEWS_POOL.slice(0, 6);
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-      {/* Header & Round Progress Track */}
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b-2 border-black">
         <div className="flex items-center gap-3">
           <PixelButton variant="secondary" size="sm" onClick={onBackToDashboard}>
@@ -347,31 +195,18 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
           </PixelButton>
           <div>
             <h2 className="text-xl sm:text-2xl font-black text-[#2D3436] flex items-center gap-2">
-              <span>📈 3단계: 5라운드 모의주식 시뮬레이션</span>
+              <span>📈 3단계: 모의주식 시뮬레이션</span>
               <PixelBadge variant={currentRound === 0 ? 'gold' : 'blue'}>
-                {currentRound === 0 ? '0라운드(초기 상장 준비 단계)' : `ROUND ${currentRound} / 5`}
+                {currentRound === 0 ? '준비 중' : `${currentRound} / 10회차 뉴스`}
               </PixelBadge>
             </h2>
             <p className="text-xs text-[#636E72] font-bold">
-              {currentRound === 0
-                ? '6대 산업 기사 확인 ➔ 초기 상장 시작 ➔ 학생 첫 포트폴리오 매수 ➔ 초기 상장 마감'
-                : '1. 신문기사 보기 (3장 선택) ➔ 2. 학생 전송 ➔ 3. 상장 시작 (매수/매도) ➔ 4. 상장 마감 (가격 등락 반영)'}
+              학생들은 현재 자유롭게 거래소에서 매매를 진행 중입니다.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <PixelButton
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowInitialNewsModal(true)}
-          >
-            <span className="flex items-center gap-1.5 text-xs font-bold">
-              <Newspaper size={14} />
-              <span>초기 6대 기사 보기</span>
-            </span>
-          </PixelButton>
-
           {session?.isCompleted && (
             <PixelButton variant="gold" size="sm" onClick={onGoToReport}>
               <span className="flex items-center gap-1.5">
@@ -383,65 +218,6 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
         </div>
       </div>
 
-      {/* Round Progress Track (R0 ~ R5) */}
-      <PixelCard className="bg-white border-4 border-black rounded-3xl p-4 shadow-[6px_6px_0px_0px_#000]">
-        <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2">
-          {/* Round 0 */}
-          <div
-            className={`flex-1 min-w-[110px] p-2.5 rounded-2xl border-2 border-black text-center transition-all ${
-              currentRound === 0
-                ? 'bg-[#FFD32D] shadow-[3px_3px_0px_0px_#000] translate-x-[-1px] translate-y-[-1px]'
-                : currentRound > 0
-                ? 'bg-[#EBFBF7] text-[#2D3436]'
-                : 'bg-[#F8F9FA] text-[#A4B0BE]'
-            }`}
-          >
-            <div className="text-[11px] font-mono font-black">R0 (초기 상장)</div>
-            <div className="text-xs font-black mt-0.5">
-              {currentRound === 0 ? (
-                <span className="text-[#D63031] font-bold">
-                  {!isR0NewsIssued && currentState === 'waiting' ? '예정' : '진행 중'}
-                </span>
-              ) : (
-                <span className="text-[#00B894] font-bold">완료 ✓</span>
-              )}
-            </div>
-          </div>
-
-          {/* Rounds 1 to 5 */}
-          {[1, 2, 3, 4, 5].map((r) => {
-            const isPast = r < currentRound;
-            const isCurrent = r === currentRound;
-            return (
-              <div
-                key={r}
-                className={`flex-1 min-w-[100px] p-2.5 rounded-2xl border-2 border-black text-center transition-all ${
-                  isCurrent
-                    ? 'bg-[#FFD32D] shadow-[3px_3px_0px_0px_#000] translate-x-[-1px] translate-y-[-1px]'
-                    : isPast
-                    ? 'bg-[#EBFBF7] text-[#2D3436]'
-                    : 'bg-[#F8F9FA] text-[#A4B0BE]'
-                }`}
-              >
-                <div className="text-[11px] font-mono font-black">ROUND {r}</div>
-                <div className="text-xs font-black mt-0.5">
-                  {isCurrent && (
-                    <span className="text-[#D63031]">
-                      {currentState === 'waiting' && '기사 선택 대기'}
-                      {currentState === 'news' && '기사 전송됨'}
-                      {currentState === 'trading' && '상장 거래중'}
-                      {currentState === 'closed' && '마감'}
-                    </span>
-                  )}
-                  {isPast && <span className="text-[#00B894]">완료 ✓</span>}
-                  {!isCurrent && !isPast && <span>예정</span>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </PixelCard>
-
       {/* Main Action Controller */}
       <PixelCard className="bg-white border-4 border-black rounded-3xl p-6 shadow-[8px_8px_0px_0px_#000] text-[#2D3436]">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 pb-4 border-b-2 border-black">
@@ -452,176 +228,49 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
             <h3 className="text-lg font-black text-[#2D3436] mt-0.5">
               현재 상태:{' '}
               <span className="text-[#0984E3] font-mono font-bold">
-                {currentRound === 0 && currentState === 'waiting' && '초기 세팅 (기사 검토 및 상장 시작 대기)'}
-                {currentRound === 0 && currentState === 'trading' && '초기 상장 중 (학생 첫 종목 매수 진행)'}
-                {currentRound >= 1 && currentState === 'waiting' && `제 ${currentRound}R 기사 선택 대기 (${revealedSlotCount}/3개)`}
-                {currentRound >= 1 && currentState === 'news' && `제 ${currentRound}R 기사 학생 전송 완료 (분석 중)`}
-                {currentRound >= 1 && currentState === 'trading' && `제 ${currentRound}R 상장 거래 중 (학생 매수/매도 진행)`}
-                {currentState === 'closed' && '라운드 마감 (결과 반영 완료)'}
+                {currentRound === 0 ? '상장 전 (다음 뉴스를 공개하여 상장을 시작하세요)' : `제 ${currentRound}회차 거래 진행 중`}
               </span>
             </h3>
           </div>
-
-          <div className="flex items-center gap-3 text-xs font-bold">
-            <span className="text-[#636E72]">이번 라운드 매매 완료:</span>
-            <span className="font-mono text-sm font-black text-[#2D3436] bg-[#FFD32D] px-3 py-1 rounded-xl border-2 border-black shadow-[2px_2px_0px_0px_#000]">
-              {tradedCountInCurrentRound} / {students.length}명
-            </span>
-          </div>
         </div>
 
-        {/* Action Controls for Round 0 vs Rounds 1~5 */}
-        {currentRound === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-5">
-            {/* Step 1: Send Initial News */}
-            <div className="space-y-2">
-              {!isR0NewsIssued ? (
-                <PixelButton
-                  variant="primary"
-                  size="lg"
-                  className="w-full animate-bounce"
-                  disabled={currentState !== 'waiting' || loading}
-                  onClick={handleIssueR0News}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <Newspaper size={18} />
-                    <span>1. 초기 기사 6건 발행 (같이 읽기)</span>
-                  </span>
-                </PixelButton>
-              ) : (
-                <PixelButton
-                  variant="primary"
-                  size="lg"
-                  className="w-full animate-bounce"
-                  disabled={currentState !== 'waiting' || loading}
-                  onClick={handleSendInitialNews}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <Send size={18} />
-                    <span>📢 초기 기사 학생들에게 전송하기!</span>
-                  </span>
-                </PixelButton>
-              )}
-              <p className="text-[11px] text-[#636E72] font-bold text-center">
-                {!isR0NewsIssued 
-                  ? '기사를 띄워 학생들과 같이 읽은 뒤 전송하세요.' 
-                  : '기사를 학생들에게 전송하고 매수를 오픈합니다.'}
-              </p>
-            </div>
-
-            {/* Step 2: Open Initial Trading */}
-            <div className="space-y-2">
-              <PixelButton
-                variant="gold"
-                size="lg"
-                className="w-full"
-                disabled={currentState === 'trading' || loading}
-                onClick={handleStartTrading}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <Play size={18} />
-                  <span>2. 상장 시작 (학생 매수)</span>
-                </span>
-              </PixelButton>
-              <p className="text-[11px] text-[#636E72] font-bold text-center">
-                학생들이 1,000,000원의 시드머니로 첫 주식을 매수할 수 있습니다.
-              </p>
-            </div>
-
-            {/* Step 2: Close Initial Trading & Start 1R */}
-            <div className="space-y-2">
-              <PixelButton
-                variant="danger"
-                size="lg"
-                className="w-full"
-                disabled={currentState !== 'trading' || loading}
-                onClick={handleCloseTrading}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <CheckCircle size={18} />
-                  <span>3. 초기 상장 마감 ➔ 1라운드 시작</span>
-                </span>
-              </PixelButton>
-              <p className="text-[11px] text-[#636E72] font-bold text-center">
-                초기 매수를 마감하고 본격적인 5라운드 시뮬레이션(1R)을 시작합니다.
-              </p>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-5">
+          <div className="space-y-2">
+            <PixelButton
+              variant="primary"
+              size="lg"
+              className="w-full animate-bounce"
+              disabled={loading || currentRound >= 10}
+              onClick={handleNextNews}
+            >
+              <span className="flex items-center justify-center gap-2">
+                <Send size={18} />
+                <span>{currentRound === 0 ? '🚀 모의주식 시작 및 첫 뉴스 공개' : '📰 다음 뉴스 공개 및 주가 변동'}</span>
+              </span>
+            </PixelButton>
+            <p className="text-[11px] text-[#636E72] font-bold text-center">
+              클릭 시 전체 주식의 가격이 변동되고, 화면에 새로운 속보 기사 3개가 나타납니다.
+            </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-5">
-            {/* Step 1: Reveal / Send News */}
-            <div className="space-y-2">
-              {revealedSlotCount > 0 && currentState === 'waiting' ? (
-                <PixelButton
-                  variant="primary"
-                  size="lg"
-                  className="w-full animate-bounce"
-                  disabled={loading}
-                  onClick={handleSendNewsToStudents}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <Send size={18} />
-                    <span>1. 📢 선택한 기사 학생들에게 전송하기!</span>
-                  </span>
-                </PixelButton>
-              ) : (
-                <PixelButton
-                  variant="primary"
-                  size="lg"
-                  className="w-full"
-                  disabled={currentState !== 'waiting' || loading}
-                  onClick={handleRevealRandom3}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <Newspaper size={18} />
-                    <span>1. 기사 3건 자동 선택 & 전송</span>
-                  </span>
-                </PixelButton>
-              )}
-              <p className="text-[11px] text-[#636E72] font-bold text-center">
-                아래 6장의 카드 중 3장을 클릭해 뒤집거나 자동 선택을 누르세요.
-              </p>
-            </div>
 
-            {/* Step 2: Start Trading */}
-            <div className="space-y-2">
-              <PixelButton
-                variant="gold"
-                size="lg"
-                className="w-full"
-                disabled={currentState !== 'news' || loading}
-                onClick={handleStartTrading}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <Play size={18} />
-                  <span>2. 상장 시작 (학생 매수/매도 오픈)</span>
-                </span>
-              </PixelButton>
-              <p className="text-[11px] text-[#636E72] font-bold text-center">
-                학생들의 화면에서 매수/매도 버튼이 활성화됩니다.
-              </p>
-            </div>
-
-            {/* Step 3: Close Trading */}
-            <div className="space-y-2">
-              <PixelButton
-                variant="danger"
-                size="lg"
-                className="w-full"
-                disabled={currentState !== 'trading' || loading}
-                onClick={handleCloseTrading}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <CheckCircle size={18} />
-                  <span>3. 상장 마감 (가격 등락 반영)</span>
-                </span>
-              </PixelButton>
-              <p className="text-[11px] text-[#636E72] font-bold text-center">
-                거래를 마감하고 주가 변동 및 학생 손익 팝업을 전송합니다.
-              </p>
-            </div>
+          <div className="space-y-2">
+            <PixelButton
+              variant="danger"
+              size="lg"
+              className="w-full"
+              disabled={loading || currentRound === 0}
+              onClick={handleEndStock}
+            >
+              <span className="flex items-center justify-center gap-2">
+                <CheckCircle size={18} />
+                <span>🛑 모의주식 전체 종료하기</span>
+              </span>
+            </PixelButton>
+            <p className="text-[11px] text-[#636E72] font-bold text-center">
+              학생들의 주식 거래를 마감시키고 최종 리포트 단계로 일괄 이동시킵니다.
+            </p>
           </div>
-        )}
+        </div>
 
         {statusMessage && (
           <div className="mt-4 p-3 rounded-2xl bg-[#EBF7FF] border-2 border-black text-[#0984E3] text-xs font-black text-center shadow-[2px_2px_0px_0px_#000]">
@@ -630,122 +279,47 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
         )}
       </PixelCard>
 
-      {/* 6-Slot News Interactive Selection Grid (For Round 1~5 & R0 Issued) */}
-      {(currentRound >= 1 || (currentRound === 0 && isR0NewsIssued)) && (
+      {/* Revealed News Grid */}
+      {currentRound > 0 && revealedNews.length > 0 && (
         <PixelCard className="bg-white border-4 border-black rounded-3xl p-5 shadow-[6px_6px_0px_0px_#000] text-[#2D3436]">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-4 border-b-2 border-black">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-[#FFD32D] border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#000]">
-                <Newspaper className="text-[#1A1A1A]" size={18} />
-              </div>
-              <div>
-                <h3 className="font-black text-lg text-[#2D3436] flex items-center gap-2">
-                  <span>{currentRound === 0 ? '초기 시장 브리핑 6대 기사' : `제 ${currentRound}라운드 6칸 신문 기사 카드`}</span>
-                  {currentRound >= 1 && (
-                    <span className="text-xs font-mono font-black px-2 py-0.5 rounded-lg bg-[#FFD32D] border border-black">
-                      선택 현황: {revealedSlotCount} / 3개
-                    </span>
-                  )}
-                </h3>
-                <p className="text-xs text-[#636E72] font-bold">
-                  {currentRound === 0 
-                    ? '카드를 클릭하면 큰 팝업으로 학생들과 같이 기사를 읽을 수 있습니다.'
-                    : currentState === 'waiting'
-                    ? '👇 카드를 3개 클릭하여 뒤집은 후, [학생들에게 전송하기] 버튼을 누르세요!'
-                    : '✅ 이번 라운드에 공개된 3개의 기사입니다. 카드를 클릭하면 전문을 볼 수 있습니다.'}
-                </p>
-              </div>
+          <div className="flex items-center gap-2 pb-3 mb-4 border-b-2 border-black">
+            <div className="p-1.5 bg-[#FFD32D] border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#000]">
+              <Newspaper className="text-[#1A1A1A]" size={18} />
             </div>
-
-            <div className="flex items-center gap-2">
-              {currentState === 'waiting' && revealedSlotCount === 3 && (
-                <PixelButton
-                  variant="primary"
-                  size="sm"
-                  disabled={loading}
-                  onClick={() => setShowSendNewsModal(true)}
-                >
-                  <span className="flex items-center gap-1.5 text-xs font-bold">
-                    <Send size={14} />
-                    <span>선택 기사 3건 전송하기</span>
-                  </span>
-                </PixelButton>
-              )}
-
-              <PixelButton
-                variant="secondary"
-                size="sm"
-                disabled={loading}
-                onClick={handleResetSlots}
-              >
-                <span className="flex items-center gap-1 text-xs">
-                  <RotateCcw size={12} />
-                  <span>↺ 슬롯 다시 섞기</span>
-                </span>
-              </PixelButton>
+            <div>
+              <h3 className="font-black text-lg text-[#2D3436]">이번 회차 속보 기사 ({revealedNews.length}건)</h3>
+              <p className="text-xs text-[#636E72] font-bold">학생들과 기사를 읽고 투자를 유도해보세요. 카드를 클릭하면 확대됩니다.</p>
             </div>
           </div>
 
-          {/* 6 Cards Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {slots.map((slot, idx) => {
-              const isRevealed = slot.isRevealed && slot.news;
-              const news = slot.news as NewsItem | null;
-              const isPositive = news?.impact === 'positive';
-
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {revealedNews.map((news) => {
+              const isPos = news.impact === 'positive';
               return (
                 <div
-                  key={idx}
-                  onClick={() => handleSlotFlip(slot.slotIndex ?? idx)}
-                  className={`min-h-[160px] rounded-2xl border-2 border-black p-3 flex flex-col justify-between transition-all select-none cursor-pointer active:scale-95 ${
-                    isRevealed && news
-                      ? isPositive
-                        ? 'bg-[#FFF0F0] hover:bg-[#FFE3E3] shadow-[4px_4px_0px_0px_#000] scale-[1.02]'
-                        : 'bg-[#EBF7FF] hover:bg-[#DDF0FF] shadow-[4px_4px_0px_0px_#000] scale-[1.02]'
-                      : 'border-dashed bg-[#FFFBEB] hover:bg-[#FFF4C2] text-[#636E72] shadow-[2px_2px_0px_0px_#000] hover:border-solid hover:scale-105'
+                  key={news.id}
+                  onClick={() => {
+                    playSelectSound();
+                    setSelectedNewsDetail(news);
+                  }}
+                  className={`p-4 rounded-xl border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] cursor-pointer hover:-translate-y-1 transition-transform ${
+                    isPos ? 'bg-[#FFF0F0]' : 'bg-[#EBF7FF]'
                   }`}
                 >
-                  {isRevealed && news ? (
-                    <>
-                      <div>
-                        <div className="flex items-center justify-between gap-1 mb-1.5">
-                          <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-white/90 border border-black truncate">
-                            {news.targetCompany}
-                          </span>
-                          <span
-                            className={`text-xs font-mono font-black ${
-                              isPositive ? 'text-[#D63031]' : 'text-[#0984E3]'
-                            }`}
-                          >
-                            {isPositive ? '▲ +' : '▼ '}{Math.abs(news.impactRate)}%
-                          </span>
-                        </div>
-                        <h4 className="font-black text-xs text-[#2D3436] line-clamp-3 leading-snug">
-                          {news.title}
-                        </h4>
-                      </div>
-                      <div className="pt-2 border-t border-black/10 flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-[#636E72]">
-                          카드 #{idx + 1}
-                        </span>
-                        <span className="text-[10px] font-black text-[#D63031] underline">
-                          상세보기 ➔
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-center py-4 space-y-1.5">
-                      <div className="w-10 h-10 rounded-xl bg-[#FFD32D] border-2 border-black flex items-center justify-center shadow-[2px_2px_0px_0px_#000] animate-bounce">
-                        <Newspaper size={20} className="text-[#1A1A1A]" />
-                      </div>
-                      <span className="text-xs font-mono font-black text-[#2D3436]">
-                        뉴스 카드 #{idx + 1}
-                      </span>
-                      <span className="text-[10px] font-black text-[#0984E3] bg-white px-2 py-0.5 rounded-full border border-black shadow-[1px_1px_0px_0px_#000]">
-                        클릭하여 뒤집기
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between text-[11px] font-black mb-2 border-b border-black pb-2">
+                    <span className="text-[#2D3436] font-mono bg-white px-2 py-0.5 rounded border border-black">
+                      {news.targetCompany}
+                    </span>
+                    <span className={isPos ? 'text-[#D63031]' : 'text-[#0984E3]'}>
+                      {isPos ? '▲ 호재' : '▼ 악재'}
+                    </span>
+                  </div>
+                  <h4 className="font-black text-sm text-[#2D3436] mt-2 mb-2 leading-snug">
+                    {news.title}
+                  </h4>
+                  <p className="text-[11px] text-[#636E72] line-clamp-3 font-medium">
+                    {news.content}
+                  </p>
                 </div>
               );
             })}
@@ -761,12 +335,9 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
               <Activity className="text-[#1A1A1A]" size={18} />
             </div>
             <h3 className="font-black text-lg text-[#2D3436]">
-              상장 10개 기업 실시간 시세 및 기업 정보
+              상장 10개 기업 실시간 시세
             </h3>
           </div>
-          <span className="text-xs text-[#636E72] font-bold">
-            참여 학생: {students.length}명
-          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -774,9 +345,7 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
             <thead>
               <tr className="border-b-2 border-black text-[#2D3436] font-mono uppercase bg-[#FFFBEB]">
                 <th className="py-2.5 px-3 font-black">종목명 / 코드</th>
-                <th className="py-2.5 px-3 font-black">업종</th>
-                <th className="py-2.5 px-3 font-black">상장 기준가</th>
-                <th className="py-2.5 px-3 font-black">현재가 ({currentRound === 0 ? '초기' : `R${currentRound}`})</th>
+                <th className="py-2.5 px-3 font-black">현재가</th>
                 <th className="py-2.5 px-3 font-black">직전 대비 등락률</th>
                 <th className="py-2.5 px-3 font-black w-[200px]">주가 변동 추이</th>
               </tr>
@@ -797,12 +366,6 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
                           </span>
                         </div>
                       </div>
-                    </td>
-                    <td className="py-3 px-3 font-sans text-[#636E72] font-bold">
-                      {c.industry}
-                    </td>
-                    <td className="py-3 px-3 text-[#636E72] font-bold">
-                      {c.initialPrice.toLocaleString()}원
                     </td>
                     <td className="py-3 px-3 text-sm font-black text-[#2D3436]">
                       {c.currentPrice.toLocaleString()}원
@@ -834,177 +397,54 @@ export const TeacherStock: React.FC<TeacherStockProps> = ({
         </div>
       </PixelCard>
 
-      {/* Modal 1: 3-Card Summary & Broadcast Modal */}
-      {showSendNewsModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border-4 border-black rounded-3xl max-w-2xl w-full p-6 shadow-[10px_10px_0px_0px_#000] space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-black">
-              <div className="flex items-center gap-2">
-                <PixelBadge variant="red">속보 기사 3건 정리</PixelBadge>
-                <span className="text-sm font-black text-[#2D3436]">
-                  제 {currentRound}라운드 선택 완료
-                </span>
+      {/* Student List & Bonus Point Provision */}
+      <PixelCard className="bg-white border-4 border-black rounded-3xl p-5 shadow-[6px_6px_0px_0px_#000] text-[#2D3436]">
+        <div className="flex items-center justify-between pb-3 mb-4 border-b-2 border-black">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-[#0984E3] border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#000]">
+              <Gift className="text-white" size={18} />
+            </div>
+            <h3 className="font-black text-lg text-[#2D3436]">학생 자산 현황 & 포인트(투자금) 지급</h3>
+          </div>
+          <span className="text-xs text-[#636E72] font-bold">참여 학생: {students.length}명</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {students.map((student) => (
+            <div key={student.studentId} className="border-2 border-black rounded-xl p-3 bg-[#F8F9FA] flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-black text-sm">{student.name}</span>
+                <PixelBadge variant={student.cash > 0 ? 'green' : 'slate'}>
+                  {student.cash > 0 ? '투자가능' : '현금부족'}
+                </PixelBadge>
               </div>
-              <button
-                onClick={() => setShowSendNewsModal(false)}
-                className="p-1 rounded-lg hover:bg-[#F8F9FA] border border-black"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs text-[#636E72] font-bold">
-                선택된 3개의 기사를 확인하고 <strong>[학생들에게 전송하기]</strong>를 클릭하세요. 학생 화면에 즉시 팝업과 함께 기사가 표시됩니다!
-              </p>
-
-              {slots
-                .filter((s) => s.isRevealed && s.news)
-                .map((slot, i) => {
-                  const n = slot.news as NewsItem;
-                  const isPos = n.impact === 'positive';
-                  return (
-                    <div
-                      key={n.id}
-                      className={`p-3.5 rounded-2xl border-2 border-black ${
-                        isPos ? 'bg-[#FFF0F0]' : 'bg-[#EBF7FF]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-xs font-black mb-1">
-                        <span className="text-[#2D3436] font-mono">
-                          #{i + 1} 대상 기업: <strong>{n.targetCompany}</strong> ({n.targetIndustry})
-                        </span>
-                        <span className={isPos ? 'text-[#D63031]' : 'text-[#0984E3]'}>
-                          영향도: {isPos ? '▲ +' : '▼ '}{Math.abs(n.impactRate)}%
-                        </span>
-                      </div>
-                      <h4 className="font-black text-sm text-[#2D3436] mb-1">{n.title}</h4>
-                      <p className="text-xs text-[#636E72] font-medium leading-relaxed">
-                        {n.content}
-                      </p>
-                    </div>
-                  );
-                })}
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
+              <div className="text-xs font-mono font-bold text-[#636E72] mb-3">
+                보유 현금: <span className="text-[#0984E3] font-black">{student.cash.toLocaleString()}원</span>
+              </div>
               <PixelButton
-                variant="secondary"
-                size="md"
-                className="flex-1"
-                onClick={() => setShowSendNewsModal(false)}
+                variant="gold"
+                size="sm"
+                className="w-full"
+                onClick={() => handleGiveBonus(student.studentId, student.name)}
               >
-                닫기
-              </PixelButton>
-              <PixelButton
-                variant="primary"
-                size="md"
-                className="flex-2"
-                onClick={handleSendNewsToStudents}
-              >
-                <span className="flex items-center justify-center gap-2">
-                  <Send size={16} />
-                  <span>📢 학생들에게 전송하기</span>
+                <span className="flex items-center justify-center gap-1 text-[11px]">
+                  <Gift size={12} />
+                  <span>투자금 지원</span>
                 </span>
               </PixelButton>
             </div>
-          </div>
+          ))}
         </div>
-      )}
+      </PixelCard>
 
-      {/* Modal 2: Initial 6 Overview News Modal */}
-      {showInitialNewsModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border-4 border-black rounded-3xl max-w-3xl w-full p-6 shadow-[10px_10px_0px_0px_#000] space-y-4 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b-4 border-black">
-              <div className="flex flex-col">
-                <h3 className="text-2xl font-black text-[#2D3436] tracking-tighter" style={{ fontFamily: 'serif' }}>
-                  THE MONEY EDU TIMES
-                </h3>
-                <span className="text-xs font-bold text-[#636E72] mt-1">초기 시장 브리핑 (R0)</span>
-              </div>
-              <button
-                onClick={() => setShowInitialNewsModal(false)}
-                className="p-1 rounded-lg hover:bg-[#F8F9FA] border-2 border-transparent hover:border-black transition-all"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-[#F4F1EA] p-4 rounded-xl border-2 border-black">
-              {initialOverviewNews.map((n, idx) => {
-                const isPos = n.impact === 'positive';
-                // Using expandedNewsId to conditionally zoom a card (simulated by full-screen modal or absolute overlay)
-                const isExpanded = selectedNewsDetail?.id === n.id;
-                
-                return (
-                  <div
-                    key={n.id}
-                    className="p-4 rounded-xl bg-white border border-[#D1CCC0] flex flex-col justify-between shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)] hover:shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 transition-all cursor-pointer"
-                    onClick={() => {
-                      playSelectSound();
-                      setSelectedNewsDetail(n); // Enlarge via Modal 3
-                    }}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-[11px] font-black mb-2 border-b border-dashed border-[#D1CCC0] pb-2">
-                        <span className="text-[#2D3436] font-mono font-bold">
-                          {n.targetCompany}
-                        </span>
-                        <span className={isPos ? 'text-[#D63031]' : 'text-[#0984E3]'}>
-                          {isPos ? '▲ 호재' : '▼ 악재'}
-                        </span>
-                      </div>
-                      <h4 className="font-black text-sm text-[#2D3436] mt-2 mb-2 leading-snug" style={{ fontFamily: 'serif' }}>
-                        {n.title}
-                      </h4>
-                      <p className="text-[11px] text-[#636E72] line-clamp-4 leading-relaxed font-medium">
-                        {n.content}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <PixelButton
-                variant="secondary"
-                size="lg"
-                className="flex-1"
-                onClick={() => setShowInitialNewsModal(false)}
-              >
-                닫기
-              </PixelButton>
-              {currentRound === 0 && currentState === 'waiting' && (
-                <PixelButton
-                  variant="primary"
-                  size="lg"
-                  className="flex-2 animate-pulse"
-                  onClick={() => {
-                    handleSendInitialNews();
-                    setShowInitialNewsModal(false);
-                  }}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    <Send size={18} />
-                    <span>학생들에게 초기 6대 기사 발행하기!</span>
-                  </span>
-                </PixelButton>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Newspaper Modal */}
+      {/* Newspaper Detail Modal */}
       {selectedNewsDetail && (
         <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#Fdfbf7] border-[6px] border-[#2D3436] rounded-sm max-w-2xl w-full p-8 md:p-12 shadow-[16px_16px_0px_0px_rgba(0,0,0,1)] space-y-6 animate-in zoom-in-95 cursor-pointer" onClick={() => setSelectedNewsDetail(null)}>
             <div className="flex flex-col items-center justify-center pb-6 border-b-[6px] border-double border-[#2D3436] space-y-2">
               <span className="text-4xl md:text-5xl font-black text-[#1A1A1A] tracking-tighter" style={{ fontFamily: 'serif' }}>THE MONEY EDU TIMES</span>
               <div className="w-full flex items-center justify-between text-[11px] font-bold text-[#636E72] uppercase tracking-widest border-t-2 border-b-2 border-[#1A1A1A] py-1 mt-4">
-                <span>{currentRound === 0 ? 'SPECIAL EDITION' : `ROUND ${currentRound} ISSUE`}</span>
+                <span>ROUND {currentRound} ISSUE</span>
                 <span>FINANCIAL CAMP NEWS</span>
                 <span>Click to Close</span>
               </div>

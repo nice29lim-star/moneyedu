@@ -1,22 +1,16 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   TrendingUp,
   TrendingDown,
   Wallet,
   Newspaper,
-  Coins,
-  CheckCircle2,
   AlertCircle,
-  HelpCircle,
-  Sparkles,
+  CheckCircle2,
   ArrowUpRight,
   ArrowDownRight,
-  Layers,
-  Award,
-  X,
-  Building2,
-  RefreshCw,
   Briefcase,
+  Layers,
+  Save
 } from 'lucide-react';
 import { Company, NewsItem, Session, Student, StudentAsset } from '../../types';
 import { PixelBadge, PixelButton, PixelCard } from '../PixelUI';
@@ -28,8 +22,7 @@ import {
   playTradeSound,
   playSuccessSound,
 } from '../../utils/soundEffects';
-import { INITIAL_COMPANIES, INITIAL_NEWS_POOL } from '../../data/seedData';
-import { isSupabaseReady, supabaseDb } from '../../utils/supabaseClient';
+import { INITIAL_COMPANIES } from '../../data/seedData';
 import { syncManager } from '../../utils/syncManager';
 
 interface StudentStockProps {
@@ -45,7 +38,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
 }) => {
   const [companies, setCompanies] = useState<Company[]>(INITIAL_COMPANIES);
   const [revealedNews, setRevealedNews] = useState<NewsItem[]>([]);
-  const [slots, setSlots] = useState<any[]>([]);
   const [myAsset, setMyAsset] = useState<StudentAsset | null>(() => ({
     studentId: student?.studentId || '',
     studentName: student?.name || '',
@@ -57,6 +49,7 @@ export const StudentStock: React.FC<StudentStockProps> = ({
     profitAmount: 0,
     profitRate: 0,
     tradedThisRound: false,
+    lastTradeRound: -1
   }));
 
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -64,17 +57,9 @@ export const StudentStock: React.FC<StudentStockProps> = ({
   const [tradeMessage, setTradeMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [trading, setTrading] = useState(false);
   const [selectedNewsDetail, setSelectedNewsDetail] = useState<NewsItem | null>(null);
-  const [showBreakingNewsModal, setShowBreakingNewsModal] = useState<boolean>(false);
-  const [showInitialNewsModal, setShowInitialNewsModal] = useState<boolean>(false);
-  const [showRoundResultModal, setShowRoundResultModal] = useState<boolean>(false);
-  const [roundResultData, setRoundResultData] = useState<{ round: number; profit: number; profitRate: number } | null>(null);
-
-  const lastAutoOpenedRoundRef = useRef<number>(-1);
-  const prevRoundRef = useRef<number>(session?.stockRound ?? 0);
-  const [unrevealedAlert, setUnrevealedAlert] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const currentRound = session?.stockRound ?? 0;
-  const currentState = session?.stockState || 'waiting';
 
   const fetchAssetAndMarket = async () => {
     if (!session?.sessionId) return;
@@ -87,103 +72,35 @@ export const StudentStock: React.FC<StudentStockProps> = ({
         if (pollData.companies && pollData.companies.length > 0) {
           syncManager.saveCompanies(session.sessionId, pollData.companies);
           setCompanies(pollData.companies);
-        } else {
-          setCompanies(syncManager.getCompanies(session.sessionId));
         }
-        const newsList = pollData.revealedNews || [];
-        setRevealedNews(newsList);
-        setSlots(pollData.slots || session.activeNewsSlots || []);
+        setRevealedNews(pollData.revealedNews || []);
         if (pollData.myAsset) {
           setMyAsset(pollData.myAsset);
-        }
-
-        const curRound = pollData.session?.stockRound ?? session.stockRound ?? 0;
-        const curState = pollData.session?.stockState ?? session.stockState ?? 'waiting';
-
-        // Auto open breaking news modal when news is pushed for round 1-5
-        if (
-          curRound >= 1 &&
-          (curState === 'news' || curState === 'trading') &&
-          newsList.length > 0 &&
-          lastAutoOpenedRoundRef.current !== curRound
-        ) {
-          lastAutoOpenedRoundRef.current = curRound;
-          
-          playFlipSound();
-        }
-      } else {
-        const localAsset = syncManager.getStudentAssetSync(session.sessionId, student.studentId, student);
-        if (localAsset) setMyAsset(localAsset);
-        setCompanies(syncManager.getCompanies(session.sessionId));
-        const localSession = syncManager.getSession(session.sessionId);
-        if (localSession) {
-          const localSlots = localSession.activeNewsSlots || [];
-          setSlots(localSlots);
-          const localNews = localSlots.filter((s: any) => s.isRevealed && s.news).map((s: any) => s.news);
-          // If Round 0 and no slots, maybe fallback to INITIAL_NEWS_POOL? Wait, Teacher pushes it now.
-          setRevealedNews(localNews);
         }
       }
     } catch (e) {
       console.error(e);
-      const localAsset = syncManager.getStudentAssetSync(session.sessionId, student.studentId, student);
-      if (localAsset) setMyAsset(localAsset);
+      // Fallback
       setCompanies(syncManager.getCompanies(session.sessionId));
-      const localSession = syncManager.getSession(session.sessionId);
-      if (localSession) {
-        const localSlots = localSession.activeNewsSlots || [];
-        setSlots(localSlots);
-        const localNews = localSlots.filter((s: any) => s.isRevealed && s.news).map((s: any) => s.news);
-        setRevealedNews(localNews);
-      }
     }
   };
 
   useEffect(() => {
+    // Attempt to restore checkpoint if exists and asset is 0
+    const checkpoint = localStorage.getItem(`fc_checkpoint_${session?.sessionId}_${student.studentId}`);
+    if (checkpoint && (!myAsset || myAsset.totalAsset === 0)) {
+      try {
+        const parsed = JSON.parse(checkpoint);
+        setMyAsset(parsed);
+      } catch(e) {}
+    }
+
     fetchAssetAndMarket();
     const interval = setInterval(fetchAssetAndMarket, 2000);
 
     const unsubscribe = syncManager.subscribe((type, payload) => {
-      if (
-        !payload?.sessionId ||
-        payload.sessionId.toUpperCase() === session?.sessionId?.toUpperCase()
-      ) {
-        if (
-          type === 'STOCK_STATE_CHANGED' ||
-          type === 'SESSION_UPDATED' ||
-          type === 'TRADE_EXECUTED' ||
-          type === 'BUDGET_SAVED'
-        ) {
-          if (type === 'STOCK_STATE_CHANGED') {
-            const curRound = payload.stockRound ?? session?.stockRound ?? 0;
-            const curState = payload.stockState || 'waiting';
-            const newsList = payload.revealedNews || [];
-
-            // Detect round completion to trigger Round Result Modal
-            if (prevRoundRef.current !== curRound && curRound > 0) {
-              const finishedRound = prevRoundRef.current;
-              prevRoundRef.current = curRound;
-              const currentAsset = syncManager.getStudentAssetSync(session?.sessionId || '', student.studentId, student);
-              setRoundResultData({
-                round: finishedRound,
-                profit: currentAsset?.profitAmount || 0,
-                profitRate: currentAsset?.profitRate || 0,
-              });
-              setShowRoundResultModal(true);
-              playSuccessSound();
-            }
-
-            if (
-              curRound >= 0 &&
-              (curState === 'news' || curState === 'trading') &&
-              newsList.length > 0 &&
-              lastAutoOpenedRoundRef.current !== curRound
-            ) {
-              lastAutoOpenedRoundRef.current = curRound;
-              
-              playFlipSound();
-            }
-          }
+      if (!payload?.sessionId || payload.sessionId.toUpperCase() === session?.sessionId?.toUpperCase()) {
+        if (type === 'STOCK_STATE_CHANGED' || type === 'SESSION_UPDATED' || type === 'TRADE_EXECUTED') {
           fetchAssetAndMarket();
           onRefreshSession();
         }
@@ -194,40 +111,15 @@ export const StudentStock: React.FC<StudentStockProps> = ({
       clearInterval(interval);
       unsubscribe();
     };
-  }, [session?.sessionId, student?.studentId, currentRound]);
-
-  const isTradingOpen = currentState === 'trading';
-  const hasTradedThisRound = myAsset?.tradedThisRound || (myAsset?.lastTradeRound === currentRound);
-
-  // Normalized 6 slots for display - completely bulletproof and non-duplicating
-  const displaySlots = useMemo(() => {
-    // If slots array exists from session/server and has 6 slots
-    if (Array.isArray(slots) && slots.length === 6 && slots[0]?.news) {
-      return slots.map((s, idx) => {
-        const isRevealed = Boolean(
-          s.isRevealed || (s.news && revealedNews.some((rn) => rn.id === s.news?.id))
-        );
-        return {
-          slotIndex: s.slotIndex ?? idx,
-          isRevealed,
-          news: s.news,
-        };
-      });
-    }
-
-    // Fallback if slots array is not fully initialized: map revealedNews into slots deterministically
-    return Array.from({ length: 6 }, (_, idx) => {
-      const matchingNews = revealedNews && revealedNews[idx] ? revealedNews[idx] : null;
-      return {
-        slotIndex: idx,
-        isRevealed: Boolean(matchingNews),
-        news: matchingNews,
-      };
-    });
-  }, [slots, revealedNews]);
+  }, [session?.sessionId, student?.studentId]);
 
   const handleTrade = async (c: Company, type: 'BUY' | 'SELL', qty: number) => {
     if (!session?.sessionId) return;
+    if (session.stockState === 'closed') {
+      setTradeMessage({ type: 'error', text: '모의주식이 종료되어 매매할 수 없습니다.' });
+      return;
+    }
+
     setTrading(true);
     setTradeMessage(null);
 
@@ -246,6 +138,8 @@ export const StudentStock: React.FC<StudentStockProps> = ({
         setTradeMessage({ type: 'success', text: result.message });
         if (result.asset) {
           setMyAsset(result.asset);
+          // auto save checkpoint on trade success
+          localStorage.setItem(`fc_checkpoint_${session.sessionId}_${student.studentId}`, JSON.stringify(result.asset));
         }
         setSelectedCompany(null);
         fetchAssetAndMarket();
@@ -260,107 +154,59 @@ export const StudentStock: React.FC<StudentStockProps> = ({
     }
   };
 
+  const handleSaveCheckpoint = async () => {
+    if (!session?.sessionId) return;
+    setSaving(true);
+    try {
+      playSuccessSound();
+      if (myAsset) {
+        localStorage.setItem(`fc_checkpoint_${session.sessionId}_${student.studentId}`, JSON.stringify(myAsset));
+      }
+      
+      const res = await fetch('/api/student/stock/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.sessionId, studentId: student.studentId }),
+      });
+      const result = await res.json();
+      
+      setTradeMessage({ type: 'success', text: result.message || '저장 완료!' });
+    } catch (e) {
+      console.error(e);
+      setTradeMessage({ type: 'success', text: '브라우저 안전 저장 완료!' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const isProfit = (myAsset?.profitRate ?? 0) >= 0;
-  const initialOverviewNews = INITIAL_NEWS_POOL.slice(0, 6);
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-      {/* 1. Round Progress & Quick Action Bar */}
+      {/* 1. Header & Quick Action Bar */}
       <PixelCard className="bg-white border-4 border-black rounded-3xl p-5 shadow-[6px_6px_0px_0px_#000] text-[#2D3436]">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <span className="text-2xl">📈</span>
             <div>
               <h3 className="font-black text-base text-[#2D3436] flex items-center gap-2">
-                <span>5라운드 모의주식 시뮬레이션</span>
+                <span>모의주식 시뮬레이션</span>
                 <PixelBadge variant={currentRound === 0 ? 'gold' : 'blue'}>
-                  {currentRound === 0 ? '0라운드(초기 상장 준비 단계)' : `ROUND ${currentRound} / 5`}
+                  {currentRound === 0 ? '초기 매매 대기 중' : `제 ${currentRound}회차 거래 진행 중`}
                 </PixelBadge>
               </h3>
               <span className="text-xs text-[#636E72] font-bold">
-                {currentRound === 0
-                  ? '초기 6대 기사를 읽고 첫 종목을 매수해보세요!'
-                  : `제 ${currentRound}라운드: 뉴스 3건 분석 ➔ 1회 매수 또는 매도 진행`}
+                선생님이 프로젝터에 띄워주시는 기사를 보고 자율적으로 매수/매도를 진행하세요.
               </span>
             </div>
           </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-
-
-            
-
-            {/* View Investment Report Button */}
-            <PixelButton
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                playSelectSound();
-                setRoundResultData({ round: currentRound, profit: myAsset?.profitAmount || 0, profitRate: myAsset?.profitRate || 0 });
-                setShowRoundResultModal(true);
-              }}
-            >
-              <span className="flex items-center gap-1.5 text-xs font-black">
-                <TrendingUp size={14} />
-                <span>📊 투자리포트 보기</span>
-              </span>
-            </PixelButton>
-
-            <PixelBadge
-              variant={
-                currentState === 'waiting'
-                  ? 'slate'
-                  : currentState === 'news'
-                  ? 'purple'
-                  : currentState === 'trading'
-                  ? 'green'
-                  : 'red'
-              }
-            >
-              {currentState === 'waiting' && '⏳ 뉴스 대기 중'}
-              {currentState === 'news' && '📰 뉴스 공개됨 (분석중)'}
-              {currentState === 'trading' && '🟢 상장 거래 중 (1회 매매 가능)'}
-              {currentState === 'closed' && '🔒 라운드 마감'}
-            </PixelBadge>
-          </div>
-        </div>
-
-        {/* 5-Round Progress Tracker */}
-        <div className="grid grid-cols-6 gap-2">
-          <div
-            className={`py-2 px-1 text-center rounded-xl border-2 border-black text-xs font-mono font-black transition-all ${
-              currentRound === 0
-                ? 'bg-[#FFD32D] text-[#1A1A1A] shadow-[3px_3px_0px_0px_#000]'
-                : 'bg-[#55E6C1] text-[#1A1A1A]'
-            }`}
-          >
-            <div>R0</div>
-            <div className="text-[10px] font-sans font-bold mt-0.5">
-              {currentRound === 0 ? '진행중' : '완료 ✓'}
-            </div>
-          </div>
-
-          {[1, 2, 3, 4, 5].map((r) => {
-            const isPast = r < currentRound;
-            const isCurrent = r === currentRound;
-            return (
-              <div
-                key={r}
-                className={`py-2 px-1 text-center rounded-xl border-2 border-black text-xs font-mono font-black transition-all ${
-                  isCurrent
-                    ? 'bg-[#FFD32D] text-[#1A1A1A] shadow-[3px_3px_0px_0px_#000] scale-105'
-                    : isPast
-                    ? 'bg-[#55E6C1] text-[#1A1A1A]'
-                    : 'bg-[#F1F2F6] text-[#A4B0BE]'
-                }`}
-              >
-                <div>R{r}</div>
-                <div className="text-[10px] font-sans font-bold mt-0.5">
-                  {isCurrent ? '진행중' : isPast ? '완료 ✓' : '대기'}
-                </div>
-              </div>
-            );
-          })}
+          
+          <PixelButton variant="gold" size="md" onClick={handleSaveCheckpoint} disabled={saving}>
+            <span className="flex items-center gap-2">
+              <Save size={16} />
+              <span>상장 마감 (안전 저장)</span>
+            </span>
+          </PixelButton>
         </div>
       </PixelCard>
 
@@ -423,7 +269,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                 {(myAsset?.totalStockValuation ?? 0).toLocaleString()}원
               </span>
             </div>
-
           </div>
         </div>
         
@@ -439,7 +284,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                 if (data.quantity <= 0) return null;
                 const company = companies.find(c => c.name === companyName);
                 if (!company) return null;
-                const valuation = data.quantity * company.currentPrice;
                 const profitRate = data.avgBuyPrice > 0 ? ((company.currentPrice - data.avgBuyPrice) / data.avgBuyPrice) * 100 : 0;
                 
                 return (
@@ -475,119 +319,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
         </div>
       )}
 
-      {/* 3. 뉴스 속보 카드 */}
-      {currentRound >= 0 && (
-        <PixelCard className="bg-white border-4 border-black rounded-3xl p-5 space-y-3 shadow-[6px_6px_0px_0px_#000] text-[#2D3436]">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-[#74B9FF] border-2 border-black rounded-xl shadow-[2px_2px_0px_0px_#000]">
-                <Newspaper className="text-[#1A1A1A]" size={18} />
-              </div>
-              <h3 className="font-black text-base text-[#2D3436]">
-                뉴스 속보 카드
-              </h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[#636E72] font-bold">
-                {revealedNews.length === 0
-                  ? '강사님이 뉴스를 전송할 때까지 대기하세요'
-                  : '카드를 클릭하면 기사 전문을 확인할 수 있습니다!'}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-3">
-            {revealedNews.filter(n => n.roundAppeared === currentRound).length === 0 ? (
-              <div className="col-span-full py-8 text-center text-[#636E72] font-bold border-2 border-dashed border-[#DFE6E9] rounded-2xl">
-                뉴스 대기 중입니다...
-              </div>
-            ) : (
-              revealedNews
-                .filter(n => n.roundAppeared === currentRound)
-                .map((news, idx) => {
-                  const isPositive = news.impact === 'positive';
-
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => {
-                        playSelectSound();
-                        setSelectedNewsDetail(news);
-                      }}
-                      className={`min-h-[140px] rounded-2xl border-2 border-black p-3 flex flex-col justify-between transition-all select-none cursor-pointer shadow-[3px_3px_0px_0px_#000] active:scale-95 ${
-                        isPositive
-                          ? 'bg-[#FFF0F0] hover:bg-[#FFE3E3] hover:scale-105'
-                          : 'bg-[#EBF7FF] hover:bg-[#DDF0FF] hover:scale-105'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between gap-1 mb-1">
-                          <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-white/90 border border-black truncate">
-                            {news.targetCompany}
-                          </span>
-                          <span
-                            className={`text-xs font-black font-mono ${
-                              isPositive ? 'text-[#D63031]' : 'text-[#0984E3]'
-                            }`}
-                          >
-                            {isPositive ? '▲ +' : '▼ '}{Math.abs(news.impactRate)}%
-                          </span>
-                        </div>
-
-                        <p className="text-xs font-black text-[#2D3436] leading-snug line-clamp-3 my-1">
-                          {news.title}
-                        </p>
-                      </div>
-
-                      <div className="pt-2 border-t border-black/10 text-[10px] text-[#D63031] font-mono font-black text-right flex items-center justify-between">
-                        <span className="text-[#636E72]">{currentRound === 0 ? '초기 속보' : `${currentRound}라운드 속보`}</span>
-                        <span className="flex items-center gap-0.5">상세보기 ➔</span>
-                      </div>
-                    </div>
-                  );
-                })
-            )}
-          </div>
-
-          {/* Past Round News */}
-          {revealedNews.filter(n => n.roundAppeared < currentRound).length > 0 && (
-            <div className="mt-4 pt-4 border-t-2 border-dashed border-[#DFE6E9]">
-              <h4 className="text-xs font-bold text-[#636E72] mb-2 flex items-center gap-1">
-                <RefreshCw size={12} />
-                지난 라운드 기사
-              </h4>
-              <div className="flex flex-col gap-2">
-                {revealedNews
-                  .filter(n => n.roundAppeared < currentRound)
-                  .sort((a, b) => b.roundAppeared - a.roundAppeared)
-                  .map((news, idx) => (
-                    <div
-                      key={`past-${idx}`}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-xl border-2 border-[#DFE6E9] bg-[#F8F9FA] hover:border-black hover:bg-white transition-colors cursor-pointer"
-                      onClick={() => {
-                        playSelectSound();
-                        setSelectedNewsDetail(news);
-                      }}
-                    >
-                      <div className="flex items-center gap-2 mb-2 sm:mb-0">
-                        <span className="text-[10px] font-mono font-black bg-white px-1.5 py-0.5 rounded border border-[#B2BEC3] text-[#636E72]">
-                          R{news.roundAppeared}
-                        </span>
-                        <span className="text-[11px] font-bold text-[#2D3436] truncate max-w-[200px]">
-                          {news.title}
-                        </span>
-                      </div>
-                      <PixelButton variant="secondary" size="sm" className="shrink-0 text-[10px] py-1 px-2">
-                        뉴스보기
-                      </PixelButton>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
-        </PixelCard>
-      )}
-
       {/* 4. 10 Listed Company Cards */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -599,13 +330,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
               상장 10개 기업 실시간 거래소
             </h3>
           </div>
-          <span className="text-xs text-[#636E72] font-bold">
-            {isTradingOpen
-              ? hasTradedThisRound
-                ? '이번 라운드 매매 완료 (다음 라운드 대기)'
-                : '🟢 거래 진행 중 (종목을 선택하여 매수/매도)'
-              : '🔒 현재는 거래 오픈 대기 상태입니다.'}
-          </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -763,7 +487,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                         variant="danger"
                         size="sm"
                         disabled={
-                          !isTradingOpen ||
                           (myAsset?.cash ?? student.cash ?? 0) < c.currentPrice * tradeQuantity ||
                           trading
                         }
@@ -776,7 +499,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
                         variant="primary"
                         size="sm"
                         disabled={
-                          !isTradingOpen ||
                           holding.quantity < tradeQuantity ||
                           trading
                         }
@@ -804,121 +526,6 @@ export const StudentStock: React.FC<StudentStockProps> = ({
           })}
         </div>
       </div>
-
-      {/* Modal 3: Round End Results & Performance Popup */}
-      {showRoundResultModal && roundResultData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <PixelCard className="bg-white border-4 border-black p-6 max-w-md w-full space-y-4 rounded-3xl shadow-[12px_12px_0px_0px_#000] text-[#2D3436] text-center">
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-4xl animate-bounce">🎉</span>
-              <PixelBadge variant="gold">
-                {roundResultData.round === 0 ? '초기 세팅 완료' : `제 ${roundResultData.round}라운드 마감`}
-              </PixelBadge>
-              <h3 className="text-xl font-black text-[#2D3436]">
-                주가 변동 및 정산 완료!
-              </h3>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-[#FFFBEB] border-2 border-black space-y-2 text-left">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-[#636E72] font-bold">내 총 평가 자산:</span>
-                <span className="font-mono font-black text-base text-[#2D3436]">
-                  {(myAsset?.totalAsset ?? 0).toLocaleString()}원
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-[#636E72] font-bold">초기 투자금 대비 누적 수익:</span>
-                <span
-                  className={`font-mono font-black text-sm ${
-                    (myAsset?.profitAmount ?? 0) >= 0 ? 'text-[#D63031]' : 'text-[#0984E3]'
-                  }`}
-                >
-                  {(myAsset?.profitAmount ?? 0) >= 0 ? '+' : ''}
-                  {(myAsset?.profitAmount ?? 0).toLocaleString()}원
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-[#636E72] font-bold">누적 수익률 (ROI):</span>
-                <span
-                  className={`font-mono font-black text-sm ${
-                    (myAsset?.profitRate ?? 0) >= 0 ? 'text-[#D63031]' : 'text-[#0984E3]'
-                  }`}
-                >
-                  {(myAsset?.profitRate ?? 0) >= 0 ? '+' : ''}
-                  {(myAsset?.profitRate ?? 0).toFixed(2)}%
-                </span>
-              </div>
-            </div>
-
-            <div className="p-3 bg-[#F8F9FA] rounded-xl border border-[#DFE6E9] text-xs text-left leading-relaxed text-[#2D3436] font-medium">
-              {(myAsset?.profitAmount ?? 0) > 0 ? (
-                <span>🎉 <strong>축하합니다!</strong> 초기 자산 대비 <span className="text-[#D63031]">{(myAsset?.profitAmount ?? 0).toLocaleString()}원</span>의 이익을 얻었습니다. 어떤 뉴스가 호재로 작용했는지 분석해보세요.</span>
-              ) : (myAsset?.profitAmount ?? 0) < 0 ? (
-                <span>📉 <strong>아쉽습니다.</strong> 초기 자산 대비 <span className="text-[#0984E3]">{Math.abs((myAsset?.profitAmount ?? 0)).toLocaleString()}원</span>의 손실이 발생했습니다. 투자 종목의 관련 악재 뉴스를 다시 한 번 꼼꼼히 확인해보세요!</span>
-              ) : (
-                <span>⚖️ <strong>자산 유지 중!</strong> 아직 이익도 손실도 발생하지 않았습니다. 이번 라운드에 과감하게 투자해보는 것은 어떨까요?</span>
-              )}
-            </div>
-
-            <p className="text-[11px] text-[#636E72] font-bold">
-              💡 창을 닫은 후에도 언제든 <strong>[투자리포트 보기]</strong> 메뉴에서 다시 확인할 수 있습니다.
-            </p>
-
-            <PixelButton
-              variant="primary"
-              size="lg"
-              className="w-full"
-              onClick={() => setShowRoundResultModal(false)}
-            >
-              다음 라운드 준비하기
-            </PixelButton>
-          </PixelCard>
-        </div>
-      )}
-
-      {/* Modal 4: Single News Detail View Modal */}
-      {selectedNewsDetail && (
-        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#F4F1EA] border-4 border-black rounded-xl max-w-2xl w-full p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] space-y-6 animate-in zoom-in-95 cursor-pointer" onClick={() => setSelectedNewsDetail(null)}>
-            <div className="flex items-center justify-between pb-4 border-b-4 border-black">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-mono font-black text-[#636E72] bg-white px-2 py-1 rounded border-2 border-black">
-                  {selectedNewsDetail.roundAppeared === 0 ? '초기 속보' : `${selectedNewsDetail.roundAppeared}라운드 속보`}
-                </span>
-              </div>
-              <div className="text-right flex flex-col">
-                <span className="text-xl font-black text-[#2D3436]" style={{ fontFamily: 'serif' }}>THE MONEY EDU TIMES</span>
-                <span className="text-[10px] font-bold text-[#636E72]">Click anywhere to close</span>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-sm font-black border-b-2 border-dashed border-[#D1CCC0] pb-2">
-                <span className="text-[#2D3436] font-mono flex items-center gap-1">
-                  <Building2 size={16} />
-                  기업명: {selectedNewsDetail.targetCompany}
-                </span>
-                <span
-                  className={
-                    selectedNewsDetail.impact === 'positive'
-                      ? 'text-[#D63031]'
-                      : 'text-[#0984E3]'
-                  }
-                >
-                  {selectedNewsDetail.impact === 'positive' ? '▲ 호재' : '▼ 악재'} ({selectedNewsDetail.impact === 'positive' ? '+' : ''}{selectedNewsDetail.impactRate}%)
-                </span>
-              </div>
-              <h3 className="font-black text-2xl text-[#2D3436] leading-snug" style={{ fontFamily: 'serif' }}>
-                {selectedNewsDetail.title}
-              </h3>
-
-              <div className="pt-2 text-base text-[#2D3436] leading-loose font-medium text-justify" style={{ fontFamily: 'serif' }}>
-                {selectedNewsDetail.content}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

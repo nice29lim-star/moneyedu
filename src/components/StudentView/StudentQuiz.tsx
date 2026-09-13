@@ -71,7 +71,7 @@ export const StudentQuiz: React.FC<StudentQuizProps> = ({ student, session }) =>
     if (attemptStatus) return; // Already attempted this question
 
     const isCorrect = selectedIndex === currentQuiz.answerIndex;
-    const newStatus = isCorrect ? 'correct' : 'incorrect';
+    const newStatus: 'correct' | 'incorrect' = isCorrect ? 'correct' : 'incorrect';
 
     // Update local attempt state
     const newAttemptedQuizzes = { ...attemptedQuizzes, [currentQuizIndex]: newStatus };

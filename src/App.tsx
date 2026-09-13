@@ -470,8 +470,12 @@ export default function App() {
               localStorage.setItem('fc_session_id', newCode);
               localStorage.setItem(`fc_session_${newCode}`, JSON.stringify(newSess));
 
-              // Clean student data for fresh session
-              localStorage.removeItem('fc_student');
+              // Clean all legacy student and session data for a completely fresh start
+              Object.keys(localStorage).forEach((key) => {
+                if (key.startsWith('fc_') && key !== 'fc_teacher_token' && key !== 'fc_session_id' && key !== `fc_session_${newCode}`) {
+                  localStorage.removeItem(key);
+                }
+              });
               setStudent(null);
 
               // Save to Supabase Cloud Database immediately

@@ -213,7 +213,7 @@ export function exportReportToCanvasImage(report: FinalReport) {
   if (!canvas) return;
   const dataUrl = canvas.toDataURL('image/png');
   const link = document.createElement('a');
-  link.download = 금융캠프_성적표__.png;
+  link.download = `금융캠프_성적표_${report.studentName || report.studentId}.png`;
   link.href = dataUrl;
   link.click();
 }

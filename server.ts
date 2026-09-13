@@ -393,26 +393,10 @@ async function startServer() {
     res.json({ ok: true, asset });
   });
 
-  // Teacher: Prepare Candidate Slots for round
-  app.post('/api/teacher/stock/prepare-slots', requireTeacher, (req, res) => {
+  // Teacher: Advance Round & Reveal Next News
+  app.post('/api/teacher/stock/next-news', requireTeacher, (req, res) => {
     const { sessionId } = req.body;
-    const session = appStore.getSession(sessionId);
-    if (!session) {
-      res.status(404).json({ ok: false, message: '세션을 찾을 수 없습니다.' });
-      return;
-    }
-    const result = appStore.prepareRoundCandidates(sessionId);
-    res.json({
-      ok: true,
-      session,
-      slots: result.slots,
-    });
-  });
-
-  // Teacher: Flip a specific slot (Teacher picks 1 of the 6 cards)
-  app.post('/api/teacher/stock/flip-slot', requireTeacher, (req, res) => {
-    const { sessionId, slotIndex } = req.body;
-    const result = appStore.flipSlot(sessionId, Number(slotIndex));
+    const result = appStore.advanceStockRound(sessionId);
     if (!result.ok) {
       res.status(400).json(result);
       return;
@@ -420,74 +404,32 @@ async function startServer() {
     res.json(result);
   });
 
-  // Teacher: Reset slots for this round
-  app.post('/api/teacher/stock/reset-slots', requireTeacher, (req, res) => {
+  // Teacher: Force End Stock Market
+  app.post('/api/teacher/stock/end', requireTeacher, (req, res) => {
     const { sessionId } = req.body;
-    const result = appStore.resetRoundSlots(sessionId);
-    const session = appStore.getSession(sessionId);
-    res.json({
-      ok: true,
-      session,
-      slots: result.slots,
-      message: '슬롯이 초기화되었습니다. 다시 2개의 기사를 선택해주세요.',
-    });
-  });
-
-  // Teacher: Reveal News (Auto Random 2 slots)
-  app.post('/api/teacher/stock/reveal-news', requireTeacher, (req, res) => {
-    const { sessionId } = req.body;
-    const session = appStore.getSession(sessionId);
-    if (!session) {
-      res.status(404).json({ ok: false, message: '세션을 찾을 수 없습니다.' });
+    const result = appStore.endStockMarket(sessionId);
+    if (!result.ok) {
+      res.status(400).json(result);
       return;
     }
-
-    const result = appStore.revealNewsForRound(sessionId);
-    res.json({
-      ok: true,
-      session,
-      revealedNews: result.revealedNews,
-      slots: result.slots,
-      message: `${session.stockRound}라운드 뉴스 2건이 랜덤으로 즉시 공개되었습니다!`,
-    });
+    res.json(result);
   });
 
-  // Teacher: Send Chosen News to Students
-  app.post('/api/teacher/stock/send-news', requireTeacher, (req, res) => {
-    const { sessionId, revealedNewsIds, slots } = req.body;
-    const result = appStore.sendNews(sessionId, revealedNewsIds || [], slots || []);
-    if (!result.ok || !result.session) {
-      res.status(404).json({ ok: false, message: '세션을 찾을 수 없습니다.' });
+  // Teacher: Give bonus to student (investment fund)
+  app.post('/api/teacher/give-bonus', requireTeacher, (req, res) => {
+    const { sessionId, studentId, amount } = req.body;
+    const student = appStore.getStudent(sessionId, studentId);
+    if (!student) {
+      res.status(404).json({ ok: false, message: '학생 정보를 찾을 수 없습니다.' });
       return;
     }
-    res.json({
-      ok: true,
-      session: result.session,
-      message: `${result.session.stockRound}라운드 뉴스 ${revealedNewsIds?.length || 0}건이 학생 화면으로 전송되었습니다!`,
-    });
+    const bonusAmount = Number(amount) || 0;
+    student.quizBonus = (student.quizBonus || 0) + bonusAmount;
+    student.cash = (student.cash || 0) + bonusAmount;
+    res.json({ ok: true, message: `${student.name} 학생에게 ${bonusAmount.toLocaleString()}원 지급 완료!` });
   });
 
-  // Teacher: Start Trading
-  app.post('/api/teacher/stock/start-trading', requireTeacher, (req, res) => {
-    const { sessionId } = req.body;
-    const session = appStore.getSession(sessionId);
-    if (!session) {
-      res.status(404).json({ ok: false, message: '세션을 찾을 수 없습니다.' });
-      return;
-    }
-
-    session.stockState = 'trading';
-    const isInitial = (session.stockRound || 0) === 0;
-    res.json({
-      ok: true,
-      session,
-      message: isInitial
-        ? '초기 상장(거래)이 시작되었습니다! 학생들이 자유롭게 매매할 수 있습니다.'
-        : `${session.stockRound}라운드 상장(거래)이 시작되었습니다! 학생들은 자유롭게 매수/매도를 진행할 수 있습니다.`,
-    });
-  });
-
-  // Student: Execute Trade (Buy or Sell, 1 per round)
+  // Student: Execute Trade (Buy or Sell)
   app.post('/api/student/stock/trade', (req, res) => {
     const { sessionId, studentId, companyName, tradeType, quantity } = req.body;
     const result = appStore.executeTrade(
@@ -506,31 +448,20 @@ async function startServer() {
     res.json(result);
   });
 
-  // Teacher: Close Trading and Advance Round
-  app.post('/api/teacher/stock/close-trading', requireTeacher, (req, res) => {
-    const { sessionId } = req.body;
-    const session = appStore.getSession(sessionId);
-    if (!session) {
-      res.status(404).json({ ok: false, message: '세션을 찾을 수 없습니다.' });
+  // Student: Save Checkpoint (상장 마감 버튼 용도)
+  app.post('/api/student/stock/save', (req, res) => {
+    const { sessionId, studentId } = req.body;
+    const student = appStore.getStudent(sessionId || '', studentId || '');
+    
+    if (!student) {
+      res.status(404).json({ ok: false, message: '학생 정보를 찾을 수 없습니다.' });
       return;
     }
-
-    if (session.stockState !== 'trading') {
-      res.status(400).json({ ok: false, message: '상장 거래(trading) 상태에서만 마감할 수 있습니다.' });
-      return;
-    }
-
-    const result = appStore.closeTradingAndApplyPriceChanges(sessionId);
-    res.json({
-      ok: true,
-      session,
-      nextRound: result.nextRound,
-      isCompleted: result.isCompleted,
-      companies: result.companies,
-      message: result.isCompleted
-        ? '6라운드 모의주식이 모두 종료되었습니다! 최종 리포트 화면으로 이동합니다.'
-        : `${session.stockRound}라운드가 시작되었습니다. 새로운 뉴스를 공개해주세요!`,
-    });
+    
+    // In our backend, trades are already recorded live.
+    // This endpoint acts as a psychological checkpoint for the student
+    // and a trigger for the frontend to backup state.
+    res.json({ ok: true, message: '안전하게 자산 상태가 저장되었습니다!' });
   });
 
   // 13. Final Report
