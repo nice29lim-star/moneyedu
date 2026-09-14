@@ -283,12 +283,6 @@ export const supabaseDb = {
 
       let { error } = await sb.from('sessions').upsert(upsertData);
 
-      // Fallback: If companies column does not exist in the database, retry without it
-      if (error && (error.message.includes('companies') || error.code === 'PGRST204' || error.code === '42703')) {
-        delete upsertData.companies;
-        const retry = await sb.from('sessions').upsert(upsertData);
-        error = retry.error;
-      }
 
       if (error) {
         console.error('Supabase upsertSession error:', error.message, error);
