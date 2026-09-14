@@ -113,6 +113,32 @@ export const StudentStock: React.FC<StudentStockProps> = ({
     };
   }, [session?.sessionId, student?.studentId]);
 
+  const [prevRound, setPrevRound] = useState(session?.stockRound ?? 0);
+  const [roundSummary, setRoundSummary] = useState<{ round: number; trades: any[]; show: boolean } | null>(null);
+
+  useEffect(() => {
+    if (currentRound > prevRound && prevRound > 0) {
+      const cleanSession = session?.sessionId?.toUpperCase() || '';
+      let localTrades: any[] = [];
+      try {
+        localTrades = JSON.parse(localStorage.getItem(`fc_trades_${cleanSession}`) || '[]');
+      } catch {}
+      
+      const myRoundTrades = localTrades.filter(
+        (t: any) => t.studentId === student?.studentId && t.round === prevRound
+      );
+      
+      setRoundSummary({ round: prevRound, trades: myRoundTrades, show: true });
+      setPrevRound(currentRound);
+      
+      setTimeout(() => {
+        setRoundSummary(prev => prev ? { ...prev, show: false } : null);
+      }, 7000); // 7초 후 자동 닫힘
+    } else if (currentRound < prevRound || (currentRound > 0 && prevRound === 0)) {
+      setPrevRound(currentRound);
+    }
+  }, [currentRound, prevRound, session?.sessionId, student?.studentId]);
+
   const handleTrade = async (c: Company, type: 'BUY' | 'SELL', qty: number) => {
     if (!session?.sessionId) return;
     if (session.stockState === 'closed') {
@@ -183,7 +209,42 @@ export const StudentStock: React.FC<StudentStockProps> = ({
   const isProfit = (myAsset?.profitRate ?? 0) >= 0;
 
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 relative">
+      {/* Round Summary Toast/Modal */}
+      {roundSummary && roundSummary.show && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setRoundSummary(prev => prev ? { ...prev, show: false } : null)}>
+          <PixelCard className="w-full max-w-sm bg-white border-4 border-black rounded-3xl p-6 shadow-[8px_8px_0px_0px_#000] relative animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setRoundSummary(prev => prev ? { ...prev, show: false } : null)}
+              className="absolute -top-4 -right-4 w-10 h-10 bg-[#FF7675] border-4 border-black rounded-full flex items-center justify-center text-white font-black shadow-[4px_4px_0px_0px_#000] hover:bg-[#D63031] active:translate-y-1 active:shadow-[0px_0px_0px_0px_#000] transition-all"
+            >
+              ✕
+            </button>
+            <div className="text-center space-y-4">
+              <div className="text-4xl">🧾</div>
+              <h3 className="text-xl font-black text-[#2D3436]">
+                {roundSummary.round}라운드 매매 요약
+              </h3>
+              <div className="space-y-2 text-sm font-bold text-[#636E72] max-h-48 overflow-y-auto custom-scrollbar">
+                {roundSummary.trades.length === 0 ? (
+                  <p className="py-2">이번 라운드에는 매매를 쉬었습니다. 💤</p>
+                ) : (
+                  roundSummary.trades.map((t, i) => (
+                    <div key={i} className="bg-[#F8F9FA] p-2 rounded-xl border-2 border-black flex items-center justify-between">
+                      <span>{t.companyName}</span>
+                      <span className={t.tradeType === 'BUY' ? 'text-[#D63031]' : 'text-[#0984E3]'}>
+                        {t.tradeType === 'BUY' ? '매수' : '매도'} {t.quantity}주
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <p className="text-[10px] text-[#B2BEC3] mt-2">화면 바깥을 터치해도 닫힙니다.</p>
+            </div>
+          </PixelCard>
+        </div>
+      )}
+
       {/* 1. Header & Quick Action Bar */}
       <PixelCard className="bg-white border-4 border-black rounded-3xl p-5 shadow-[6px_6px_0px_0px_#000] text-[#2D3436]">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">

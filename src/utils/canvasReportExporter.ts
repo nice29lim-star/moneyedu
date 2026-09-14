@@ -215,5 +215,7 @@ export function exportReportToCanvasImage(report: FinalReport) {
   const link = document.createElement('a');
   link.download = `금융캠프_성적표_${report.studentName || report.studentId}.png`;
   link.href = dataUrl;
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
 }

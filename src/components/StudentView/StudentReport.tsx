@@ -59,7 +59,28 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
         const myData = calculated.find((s) => s.studentId === student.studentId);
         
         if (myData) {
-          const sbTrades = await supabaseDb.getTrades(session.sessionId, student.studentId);
+          const companies = syncManager.getCompanies(session.sessionId.toUpperCase());
+          let sbTrades = await supabaseDb.getTrades(session.sessionId, student.studentId);
+          if (!sbTrades || sbTrades.length === 0) {
+            try {
+              const localTrades = JSON.parse(localStorage.getItem(`fc_trades_${session.sessionId.toUpperCase()}`) || '[]');
+              sbTrades = localTrades.filter((t: any) => t.studentId === student.studentId);
+            } catch {}
+          }
+          
+          let formattedHoldings: any[] = [];
+          if (myData.holdings) {
+            const hList = Array.isArray(myData.holdings) ? myData.holdings : Object.values(myData.holdings);
+            formattedHoldings = hList.map((h: any) => {
+              const comp = companies.find((c: any) => c.name === h.companyName);
+              const curP = comp?.currentPrice || h.avgBuyPrice || 0;
+              const cost = h.quantity * h.avgBuyPrice;
+              const val = h.quantity * curP;
+              const pRate = cost > 0 ? ((val - cost) / cost) * 100 : 0;
+              return { ...h, currentPrice: curP, valuation: val, profitRate: pRate };
+            }).filter((h: any) => h.quantity > 0);
+          }
+
           const reportObj: any = {
             studentId: myData.studentId,
             studentName: myData.name,
@@ -75,8 +96,9 @@ export const StudentReport: React.FC<StudentReportProps> = ({ student, session }
             profitRate: myData.profitRate,
             rank: myRank,
             totalStudents: students.length,
-            holdings: myData.holdings || [],
+            holdings: formattedHoldings,
             trades: sbTrades || [],
+            tradeLogs: sbTrades || [],
             investorType: {
               title: myData.profitRate >= 10 ? '스마트 성장형 투자자' : '안정 균형형 투자자',
               badge: myData.profitRate >= 10 ? '🚀 공격적 성장 추구' : '🛡️ 안정적 자산 배분',

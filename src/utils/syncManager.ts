@@ -391,6 +391,31 @@ export const syncManager = {
     return recalculateAssets(syncManager.getLocalStudents(cleanSession));
   },
 
+  addBonusToAsset: async (sessionId: string, studentId: string, amount: number) => {
+    if (!sessionId || !studentId || !amount) return;
+    const cleanSession = sessionId.toUpperCase();
+    
+    // 1. Get current asset
+    const asset = syncManager.getStudentAssetSync(cleanSession, studentId);
+    if (!asset) return;
+    
+    // 2. Update cash and total asset
+    asset.cash += amount;
+    asset.totalAsset += amount;
+    asset.profitAmount = asset.totalAsset - (asset.initialInvestment || 0);
+    asset.profitRate = asset.initialInvestment > 0 ? parseFloat(((asset.profitAmount / asset.initialInvestment) * 100).toFixed(2)) : 0;
+    
+    // 3. Save locally
+    try {
+      localStorage.setItem(`fc_asset_${cleanSession}_${studentId}`, JSON.stringify(asset));
+    } catch {}
+    
+    // 4. Save to Supabase (Optional for redundancy)
+    if (supabaseDb.isReady()) {
+      supabaseDb.upsertStudentAsset(cleanSession, asset).catch(() => {});
+    }
+  },
+
   // Give bonus to student (tries Supabase -> Express -> GAS -> LocalStorage)
   giveBonus: async (sessionId: string, studentId: string, amount: number, token: string): Promise<boolean> => {
     if (!sessionId || !studentId) return false;
@@ -1450,7 +1475,27 @@ export const syncManager = {
       
       const availableNews = INITIAL_NEWS_POOL.filter((n) => !usedSet.has(n.id));
       const shuffled = [...availableNews].sort(() => Math.random() - 0.5);
-      const pickedNews = shuffled.slice(0, 3);
+      
+      const pickedNews: typeof INITIAL_NEWS_POOL = [];
+      const seenCompanies = new Set<string>();
+      
+      for (const news of shuffled) {
+        if (pickedNews.length >= 3) break;
+        if (!news.targetCompany || !seenCompanies.has(news.targetCompany)) {
+          pickedNews.push(news);
+          if (news.targetCompany) seenCompanies.add(news.targetCompany);
+        }
+      }
+      
+      // If we couldn't find 3 unique, just fill with whatever is left
+      if (pickedNews.length < 3) {
+        for (const news of shuffled) {
+          if (pickedNews.length >= 3) break;
+          if (!pickedNews.some(p => p.id === news.id)) {
+            pickedNews.push(news);
+          }
+        }
+      }
       
       currentSession.revealedNewsIds = pickedNews.map(n => n.id);
       currentSession.activeNewsSlots = pickedNews.map((news, idx) => ({

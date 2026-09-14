@@ -56,11 +56,34 @@ export const TeacherReport: React.FC<TeacherReportProps> = ({
       try {
         const students = await syncManager.fetchStudents(session.sessionId, token);
         if (Array.isArray(students) && students.length > 0) {
+          const companies = syncManager.getCompanies(session.sessionId.toUpperCase());
+          let allTrades = await syncManager.supabaseDb?.getTrades(session.sessionId) || [];
+          if (!allTrades || allTrades.length === 0) {
+            try {
+              allTrades = JSON.parse(localStorage.getItem(`fc_trades_${session.sessionId.toUpperCase()}`) || '[]');
+            } catch {}
+          }
+          
           const calculated: FinalReport[] = students.map((st, idx) => {
             const seed = st.initialInvestment ?? 0;
             const finalAsset = st.totalAsset || st.cash || seed;
             const diff = finalAsset - seed;
             const profitRate = seed > 0 ? (diff / seed) * 100 : 0;
+            
+            const myTrades = allTrades.filter((t: any) => t.studentId === st.studentId);
+            let formattedHoldings: any[] = [];
+            if (st.holdings) {
+              const hList = Array.isArray(st.holdings) ? st.holdings : Object.values(st.holdings);
+              formattedHoldings = hList.map((h: any) => {
+                const comp = companies.find((c: any) => c.name === h.companyName);
+                const curP = comp?.currentPrice || h.avgBuyPrice || 0;
+                const cost = h.quantity * h.avgBuyPrice;
+                const val = h.quantity * curP;
+                const pRate = cost > 0 ? ((val - cost) / cost) * 100 : 0;
+                return { ...h, currentPrice: curP, valuation: val, profitRate: pRate };
+              }).filter((h: any) => h.quantity > 0);
+            }
+
             return {
               studentId: st.studentId,
               studentName: st.name,
@@ -76,8 +99,9 @@ export const TeacherReport: React.FC<TeacherReportProps> = ({
               profitRate,
               rank: idx + 1,
               totalStudents: students.length,
-              holdings: [],
-              trades: [],
+              holdings: formattedHoldings,
+              trades: myTrades,
+              tradeLogs: myTrades,
               investorType: {
                 title: profitRate >= 10 ? '스마트 성장형 투자자' : '안정 균형형 투자자',
                 badge: profitRate >= 10 ? '🚀 공격적 성장 추구' : '🛡️ 안정적 자산 배분',

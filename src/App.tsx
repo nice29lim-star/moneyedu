@@ -148,12 +148,14 @@ export default function App() {
           (payload.studentId === student.studentId ||
             (payload.name && payload.name === student.name))
         ) {
+          const amt = Number(payload.amount || 0);
+          syncManager.addBonusToAsset(sessionId, student.studentId, amt);
           setStudent((prev) => {
             if (!prev) return prev;
             const updated = {
               ...prev,
-              quizBonus: (prev.quizBonus || 0) + Number(payload.amount || 0),
-              cash: (prev.cash || 0) + Number(payload.amount || 0),
+              quizBonus: (prev.quizBonus || 0) + amt,
+              cash: (prev.cash || 0) + amt,
             };
             localStorage.setItem('fc_student', JSON.stringify(updated));
             return updated;
