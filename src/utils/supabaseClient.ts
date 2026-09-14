@@ -268,7 +268,7 @@ export const supabaseDb = {
     const sb = getSupabase();
     if (!sb) return { success: false, error: 'Supabase 클라이언트가 초기화되지 않았습니다. URL/Key를 확인해주세요.' };
     try {
-      const { error } = await sb.from('sessions').upsert({
+      let upsertData: any = {
         session_id: session.sessionId.toUpperCase(),
         current_module: session.currentModule,
         stock_round: session.stockRound,
@@ -279,7 +279,17 @@ export const supabaseDb = {
         companies: session.companies || [],
         is_completed: session.isCompleted || false,
         updated_at: new Date().toISOString(),
-      });
+      };
+
+      let { error } = await sb.from('sessions').upsert(upsertData);
+
+      // Fallback: If companies column does not exist in the database, retry without it
+      if (error && (error.message.includes('companies') || error.code === 'PGRST204' || error.code === '42703')) {
+        delete upsertData.companies;
+        const retry = await sb.from('sessions').upsert(upsertData);
+        error = retry.error;
+      }
+
       if (error) {
         console.error('Supabase upsertSession error:', error.message, error);
         return { success: false, error: formatSupabaseErrorMessage(error.message) };
