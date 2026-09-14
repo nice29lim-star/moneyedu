@@ -45,6 +45,7 @@ export interface Session {
   revealedNewsIds: number[]; // news ids revealed in current round
   activeNewsSlots: { slotIndex: number; news: NewsItem | null; isRevealed: boolean }[];
   isCompleted: boolean;
+  companies?: Company[];
 }
 
 export interface Job {

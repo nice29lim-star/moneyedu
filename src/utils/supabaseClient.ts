@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS public.sessions (
     current_quiz_index INT NOT NULL DEFAULT 0,
     revealed_news_ids JSONB DEFAULT '[]'::jsonb,
     active_news_slots JSONB DEFAULT '[]'::jsonb,
+    companies JSONB DEFAULT '[]'::jsonb,
     is_completed BOOLEAN DEFAULT FALSE,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -275,6 +276,7 @@ export const supabaseDb = {
         current_quiz_index: session.currentQuizIndex || 0,
         revealed_news_ids: session.revealedNewsIds || [],
         active_news_slots: session.activeNewsSlots || [],
+        companies: session.companies || [],
         is_completed: session.isCompleted || false,
         updated_at: new Date().toISOString(),
       });
@@ -337,6 +339,7 @@ export const supabaseDb = {
         currentQuizIndex: data.current_quiz_index,
         revealedNewsIds: data.revealed_news_ids || [],
         activeNewsSlots: data.active_news_slots || [],
+        companies: data.companies || [],
         isCompleted: data.is_completed,
       };
     } catch {

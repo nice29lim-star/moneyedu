@@ -50,9 +50,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     if (onStartModule) onStartModule(mod);
     else if (onSetModule) onSetModule(mod);
   };
-  const [students, setStudents] = useState<any[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [copied, setCopied] = useState(false);
-  const [selectedStudentForBonus, setSelectedStudentForBonus] = useState<any | null>(null);
+  const [selectedStudentForBonus, setSelectedStudentForBonus] = useState<Student | null>(null);
   const [bonusAmount, setBonusAmount] = useState('100000');
   const [isAwarding, setIsAwarding] = useState(false);
   const [bonusMessage, setBonusMessage] = useState('');
@@ -161,7 +161,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     const rows = students.map((s) => [
       s.studentNum || '',
       s.name || '',
-      s.jobTitle || '미선택',
+      s.selectedJob?.title || '미선택',
       s.selectedJob?.monthlySalary || 0,
       s.quizBonus || 0,
       s.initialInvestment || 0,
@@ -268,7 +268,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     step: string;
     title: string;
     desc: string;
-    icon: any;
+    icon: React.ElementType;
     color: string;
     borderVariant: 'gold' | 'cyan' | 'rose' | 'default';
   }[] = [
@@ -514,7 +514,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       </td>
                       <td className="py-3 px-3">
                         <span className="px-2 py-0.5 rounded-lg bg-white text-[#2D3436] font-mono text-[11px] border border-black font-bold">
-                          {s.jobTitle || '미선택'}
+                          {s.selectedJob?.title || '미선택'}
                         </span>
                       </td>
                       <td className="py-3 px-3">

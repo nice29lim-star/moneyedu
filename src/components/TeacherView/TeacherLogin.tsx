@@ -4,6 +4,7 @@ import { PixelBadge, PixelButton, PixelCard } from '../PixelUI';
 import { playSuccessSound, playBuzzerSound } from '../../utils/soundEffects';
 import { isSupabaseReady, supabaseDb } from '../../utils/supabaseClient';
 import { Session } from '../../types';
+import { syncManager } from '../../utils/syncManager';
 
 interface TeacherLoginProps {
   onLoginSuccess: (token: string, session?: Session | null) => void;
@@ -71,6 +72,9 @@ export const TeacherLogin: React.FC<TeacherLoginProps> = ({ onLoginSuccess }) =>
         const existing = await supabaseDb.getSession(cleanSession);
         if (existing) {
           targetSession = existing;
+          if (existing.companies && existing.companies.length > 0) {
+            syncManager.saveCompanies(cleanSession, existing.companies);
+          }
         } else {
           const newSess: Session = {
             sessionId: cleanSession,

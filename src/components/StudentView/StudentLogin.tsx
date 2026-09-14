@@ -60,6 +60,9 @@ export const StudentLogin: React.FC<StudentLoginProps> = ({
           const sbSession = await supabaseDb.getSession(cleanSession);
           if (sbSession) {
             targetSession = sbSession;
+            if (sbSession.companies && sbSession.companies.length > 0) {
+              syncManager.saveCompanies(cleanSession, sbSession.companies);
+            }
           } else {
             const localSess = syncManager.getSession(cleanSession);
             if (localSess && localSess.sessionId.toUpperCase() === cleanSession) {

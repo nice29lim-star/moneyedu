@@ -20,7 +20,7 @@ const getGasUrl = (): string => {
       const stored = localStorage.getItem('fc_gas_url');
       if (stored && stored.trim()) return stored.trim();
     }
-  } catch {}
+  } catch (err) { console.warn('syncManager error:', err); }
   return import.meta.env.VITE_GAS_API_URL || '';
 };
 
@@ -32,7 +32,7 @@ export const syncManager = {
         localStorage.setItem('fc_gas_url', url.trim());
       }
       syncManager.broadcast('GAS_URL_UPDATED', { url: url.trim() });
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
   },
 
   // Send real-time event to Google Apps Script / Sheet (Server proxy + direct fallback)
@@ -165,7 +165,7 @@ export const syncManager = {
           if (parsed && parsed.type) {
             handler(parsed.type, parsed.payload);
           }
-        } catch {}
+        } catch (err) { console.warn('syncManager error:', err); }
       }
     };
 
@@ -267,7 +267,7 @@ export const syncManager = {
         sessionId: cleanSession,
         student: normalized,
       });
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
   },
 
   // Get local students for session
@@ -320,7 +320,7 @@ export const syncManager = {
         if (Array.isArray(sbStudents)) {
           return recalculateAssets(sbStudents.map(syncManager.normalizeStudent));
         }
-      } catch {}
+      } catch (err) { console.warn('syncManager error:', err); }
     }
 
     // 2. Try Express API
@@ -345,12 +345,12 @@ export const syncManager = {
           // Cache the combined list
           try {
             localStorage.setItem(`fc_students_${cleanSession}`, JSON.stringify(combined));
-          } catch {}
+          } catch (err) { console.warn('syncManager error:', err); }
           
           return recalculateAssets(combined);
         }
       }
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 3. Try Google Apps Script API
     const gasUrl = getGasUrl();
@@ -384,7 +384,7 @@ export const syncManager = {
             return recalculateAssets(combined);
           }
         }
-      } catch {}
+      } catch (err) { console.warn('syncManager error:', err); }
     }
 
     // 4. Fallback: LocalStorage students
@@ -429,7 +429,7 @@ export const syncManager = {
           return true;
         }
       }
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 2. Guaranteed LocalStorage Update & Broadcast
     try {
@@ -491,7 +491,7 @@ export const syncManager = {
           return true;
         }
       }
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 2. Guaranteed LocalStorage Update & Broadcast
     try {
@@ -525,6 +525,9 @@ export const syncManager = {
       try {
         const sbSession = await supabaseDb.getSession(cleanSession);
         if (sbSession) {
+          if (sbSession.companies && sbSession.companies.length > 0) {
+            syncManager.saveCompanies(cleanSession, sbSession.companies);
+          }
           let myStudent = undefined;
           let myAsset = undefined;
           if (studentId) {
@@ -539,7 +542,7 @@ export const syncManager = {
             myAsset,
           };
         }
-      } catch {}
+      } catch (err) { console.warn('syncManager error:', err); }
     }
 
     // 2. Express API
@@ -549,10 +552,13 @@ export const syncManager = {
       if (res.ok) {
         const data = await res.json();
         if (data && data.ok && data.session) {
+          if (data.session.companies && data.session.companies.length > 0) {
+            syncManager.saveCompanies(cleanSession, data.session.companies);
+          }
           return data;
         }
       }
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 3. GAS API
     const gasUrl = getGasUrl();
@@ -581,7 +587,7 @@ export const syncManager = {
             };
           }
         }
-      } catch {}
+      } catch (err) { console.warn('syncManager error:', err); }
     }
 
     // 4. LocalStorage Session
@@ -594,7 +600,7 @@ export const syncManager = {
           session: localSess,
         };
       }
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     return null;
   },
@@ -606,7 +612,7 @@ export const syncManager = {
       if (!cleanSession) return null;
       const str = localStorage.getItem(`fc_session_${cleanSession}`);
       if (str) return JSON.parse(str);
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
     return null;
   },
 
@@ -614,6 +620,9 @@ export const syncManager = {
   saveSession: async (session: Session) => {
     if (!session || !session.sessionId) return;
     const cleanSession = session.sessionId.toUpperCase();
+
+    // Attach companies to session to sync to Supabase
+    session.companies = syncManager.getCompanies(cleanSession);
 
     // 1. Supabase Cloud DB
     if (supabaseDb.isReady()) {
@@ -623,7 +632,7 @@ export const syncManager = {
     // 2. LocalStorage
     try {
       localStorage.setItem(`fc_session_${cleanSession}`, JSON.stringify(session));
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 3. Local Broadcast
     syncManager.broadcast('SESSION_UPDATED', { sessionId: cleanSession, session });
@@ -650,13 +659,13 @@ export const syncManager = {
     if (sessStr) {
       try {
         sessObj = { ...JSON.parse(sessStr), currentModule, isCompleted: currentModule === 'report' };
-      } catch {}
+      } catch (err) { console.warn('syncManager error:', err); }
     }
 
     // 2. Save locally
     try {
       localStorage.setItem(sessKey, JSON.stringify(sessObj));
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 3. Save to Supabase Cloud Database
     if (supabaseDb.isReady()) {
@@ -678,7 +687,7 @@ export const syncManager = {
         headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
         body: JSON.stringify({ sessionId: cleanSession, moduleName: currentModule, token }),
       }).catch(() => {});
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 6. GAS update
     syncManager.sendToGoogleSheets('updateSessionState', {
@@ -693,7 +702,7 @@ export const syncManager = {
       const cleanSession = sessionId.toUpperCase();
       const str = localStorage.getItem(`fc_companies_${cleanSession}`);
       if (str) return JSON.parse(str);
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
     return INITIAL_COMPANIES;
   },
 
@@ -702,7 +711,7 @@ export const syncManager = {
     try {
       const cleanSession = sessionId.toUpperCase();
       localStorage.setItem(`fc_companies_${cleanSession}`, JSON.stringify(companies));
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
   },
 
   // Prepare 6 Candidate News Slots for the round
@@ -739,7 +748,7 @@ export const syncManager = {
           updatedSession.activeNewsSlots = slots;
         }
       }
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // Local fallback if no slots or less than 6
     if (!slots || slots.length !== 6 || !slots[0]?.news) {
@@ -862,7 +871,7 @@ export const syncManager = {
         headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
         body: JSON.stringify({ sessionId: cleanSession, token }),
       });
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     const prep = await syncManager.prepareCandidateSlots(cleanSession, updatedSession, token);
     return prep;
@@ -907,7 +916,7 @@ export const syncManager = {
           token,
         }),
       });
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 2. Save & Broadcast to all students
     await syncManager.saveSession(updatedSession);
@@ -995,7 +1004,7 @@ export const syncManager = {
           updatedSession = data.session;
         }
       }
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     updatedSession.stockState = 'trading';
 
@@ -1059,7 +1068,7 @@ export const syncManager = {
           serverHandled = true;
         }
       }
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 2. Local Fallback Price Updates ONLY if server didn't handle it
     if (!serverHandled) {
@@ -1124,7 +1133,7 @@ export const syncManager = {
         if (prep?.slots) {
           updatedSession.activeNewsSlots = prep.slots;
         }
-      } catch {}
+      } catch (err) { console.warn('syncManager error:', err); }
     }
 
     // 3. Save & Broadcast
@@ -1314,7 +1323,7 @@ export const syncManager = {
       const existingTrades: StockTrade[] = existingTradesStr ? JSON.parse(existingTradesStr) : [];
       existingTrades.unshift(tradeLog);
       localStorage.setItem(tradesKey, JSON.stringify(existingTrades));
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 4. Save to Supabase Cloud DB
     if (supabaseDb.isReady()) {
@@ -1340,7 +1349,7 @@ export const syncManager = {
           quantity: qty,
         }),
       }).catch(() => {});
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     // 6. Broadcast Real-time event
     syncManager.broadcast('TRADE_EXECUTED', {
@@ -1364,7 +1373,7 @@ export const syncManager = {
     try {
       const localStr = localStorage.getItem(`fc_asset_${cleanSession}_${studentId}`);
       if (localStr) return JSON.parse(localStr);
-    } catch {}
+    } catch (err) { console.warn('syncManager error:', err); }
 
     const startCash = fallbackStudent?.cash ?? 0;
     return {
@@ -1389,7 +1398,7 @@ export const syncManager = {
       try {
         const sbAsset = await supabaseDb.getStudentAsset(cleanSession, studentId);
         if (sbAsset) return sbAsset;
-      } catch {}
+      } catch (err) { console.warn('syncManager error:', err); }
     }
 
     return syncManager.getStudentAssetSync(cleanSession, studentId, fallbackStudent);
@@ -1543,7 +1552,7 @@ export const syncManager = {
         if (sbStudents && sbStudents.length > 0) {
           students = sbStudents.map(syncManager.normalizeStudent);
         }
-      } catch {}
+      } catch (err) { console.warn('syncManager error:', err); }
     }
     
     const revealedNews = INITIAL_NEWS_POOL.filter((n) => session?.revealedNewsIds?.includes(n.id));
